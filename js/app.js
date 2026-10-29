@@ -1309,16 +1309,28 @@ function getLocalData() {
     const data = JSON.parse(raw);
     // Auto-repair any position with missing or zero investedAmount or buyPrice
     if (data && Array.isArray(data.positions)) {
+      let changed = false;
       data.positions.forEach(pos => {
         const sh = parseFloat(pos.shares) || 0;
         let inv = parseFloat(pos.investedAmount) || 0;
         let pr = parseFloat(pos.buyPrice) || 0;
-        if (inv <= 0 && sh > 0 && pr > 0) {
+        if (pos.symbol === 'SPCX' && (pr <= 0 || inv <= 0)) {
+          pos.buyPrice = 134.17;
+          pos.investedAmount = 48.82;
+          pos.buyFee = 1.17;
+          pos.sellFee = 1.17;
+          changed = true;
+        } else if (inv <= 0 && sh > 0 && pr > 0) {
           pos.investedAmount = Math.round((sh * pr) * 100) / 100;
+          changed = true;
         } else if (pr <= 0 && sh > 0 && inv > 0) {
           pos.buyPrice = Math.round((inv / sh) * 100) / 100;
+          changed = true;
         }
       });
+      if (changed) {
+        localStorage.setItem('revolut_tracker_data', JSON.stringify(data));
+      }
     }
     return data;
   } catch (e) {
@@ -1595,11 +1607,29 @@ async function buildPortfolioData() {
 
   const enrichedPositions = await Promise.all(positions.map(async (pos) => {
     try {
-      const shares = parseFloat(pos.shares) || 0;
-      const buyPrice = parseFloat(pos.buyPrice) || 0;
+      let shares = parseFloat(pos.shares) || 0;
+      let buyPrice = parseFloat(pos.buyPrice) || 0;
+      let investedNative = parseFloat(pos.investedAmount) || 0;
       const posCurrency = (pos.currency || "EUR").toUpperCase();
-      const chart = await fetchClientChart(pos.symbol, buyPrice);
+      const chart = await fetchClientChart(pos.symbol, buyPrice || 100);
       const chartCurrency = (chart.currency || posCurrency).toUpperCase();
+
+      // AUTO-REPAIR MISSING BUY PRICE OR INVESTED AMOUNT
+      if (buyPrice <= 0 || investedNative <= 0) {
+        if (pos.symbol === 'SPCX') {
+          buyPrice = 134.17;
+          investedNative = 48.82;
+        } else if (pos.buyDate && chart.history && chart.history.length > 0) {
+          const candle = chart.history.find(c => c.dateStr === pos.buyDate);
+          buyPrice = (candle && candle.close > 0) ? Math.round(candle.close * 100) / 100 : (chart.currentPrice || 100);
+          investedNative = Math.round((shares * buyPrice) * 100) / 100;
+        } else if (chart.currentPrice > 0) {
+          buyPrice = chart.currentPrice;
+          investedNative = Math.round((shares * buyPrice) * 100) / 100;
+        }
+        pos.buyPrice = buyPrice;
+        pos.investedAmount = investedNative;
+      }
 
       const posToEurRate = await getClientRateToEUR(posCurrency);
       const chartToEurRate = await getClientRateToEUR(chartCurrency);
@@ -1609,7 +1639,7 @@ async function buildPortfolioData() {
         currentPriceInPosCurrency = (chart.currentPrice * chartToEurRate) / posToEurRate;
       }
 
-      const investedNative = parseFloat(pos.investedAmount) || (shares * buyPrice);
+      if (!investedNative) investedNative = shares * buyPrice;
       const currentValueNative = shares * currentPriceInPosCurrency;
       const totalGainNative = currentValueNative - investedNative;
       const totalGainPercent = investedNative > 0 ? (totalGainNative / investedNative) * 100 : 0;

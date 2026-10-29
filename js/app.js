@@ -133,6 +133,19 @@ const I18N = {
     invested: "Investi",
     currentValue: "Valeur Actuelle",
     totalGain: "Gain Total",
+    liveSharePriceLabel: "Cours en Direct (1 part)",
+    liveActionSubtext: "Valeur de marché d'une action",
+    keySupportLabel: "Support Clé (Creux)",
+    statusUnderSupport: "Alerte : Le cours est passé sous le support",
+    statusAboveSupport: "Le cours se maintient au-dessus du support",
+    todayRangeLabel: "Séance du jour (Intraday)",
+    dayMinShort: "Min",
+    dayMaxShort: "Max",
+    todayLabelShort: "auj.",
+    myInvestedCapital: "Capital Investi (Mes sous)",
+    myCurrentPortfolioVal: "Valeur de mon Capital",
+    myNetProfitLabel: "Mon Gain Net (Après frais)",
+    sharesTimesPrice: "{shares} part(s) × {price}",
     today: "Aujourd'hui",
     yesterday: "Hier",
     boughtOn: "Acheté le",
@@ -274,6 +287,19 @@ const I18N = {
     invested: "Invested",
     currentValue: "Current Value",
     totalGain: "Total Gain",
+    liveSharePriceLabel: "Live Share Price (1 share)",
+    liveActionSubtext: "Official stock market price",
+    keySupportLabel: "Key Support Level",
+    statusUnderSupport: "Alert: Price broke below support",
+    statusAboveSupport: "Price is safely holding above support",
+    todayRangeLabel: "Today's Range (Intraday)",
+    dayMinShort: "Low",
+    dayMaxShort: "High",
+    todayLabelShort: "today",
+    myInvestedCapital: "Invested (My Capital)",
+    myCurrentPortfolioVal: "My Position Value",
+    myNetProfitLabel: "My Net Profit (After fees)",
+    sharesTimesPrice: "{shares} share(s) × {price}",
     today: "Today",
     yesterday: "Yesterday",
     boughtOn: "Bought on",
@@ -1271,6 +1297,8 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
         }
 
         const currentPrice = meta.regularMarketPrice || (validDaily.length ? validDaily[validDaily.length - 1].close : defaultPrice);
+        const dayHigh = meta.regularMarketDayHigh || currentPrice;
+        const dayLow = meta.regularMarketDayLow || currentPrice;
 
         const payload = {
           symbol: meta.symbol || symbol,
@@ -1278,6 +1306,8 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
           currency: (meta.currency || 'USD').toUpperCase(),
           currentPrice,
           previousClose: meta.chartPreviousClose || (validDaily.length > 1 ? validDaily[validDaily.length - 2].close : currentPrice),
+          dayHigh,
+          dayLow,
           history: validDaily,
         };
 
@@ -1308,6 +1338,8 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
     currency: 'USD',
     currentPrice: basePrice,
     previousClose: basePrice,
+    dayHigh: basePrice,
+    dayLow: basePrice,
     history
   };
   clientCache.quotes.set(symbol, fallbackPayload);
@@ -1661,6 +1693,15 @@ async function buildPortfolioData() {
       const totalFeesEur = totalFeesNative * posToEurRate;
       const netGainEur = totalGainEur - totalFeesEur;
 
+      const rawDayHigh = chart.dayHigh || currentPriceInPosCurrency;
+      const rawDayLow = chart.dayLow || currentPriceInPosCurrency;
+      let dayHigh = rawDayHigh;
+      let dayLow = rawDayLow;
+      if (chartCurrency !== posCurrency && posToEurRate > 0) {
+        dayHigh = (rawDayHigh * chartToEurRate) / posToEurRate;
+        dayLow = (rawDayLow * chartToEurRate) / posToEurRate;
+      }
+
       totalInvestedEur += investedEur;
       totalCurrentValueEur += currentValueEur;
       totalDayGainEur += todayChangeEur;
@@ -1687,6 +1728,8 @@ async function buildPortfolioData() {
         lowestClose,
         recentSwingLow,
         recentSwingHigh,
+        dayHigh,
+        dayLow,
         distanceFromHighPct,
         distanceFromLowPct,
         isBreakOfStructure,
@@ -1745,6 +1788,8 @@ async function buildPortfolioData() {
         lowestClose: pos.buyPrice,
         recentSwingLow: pos.buyPrice,
         recentSwingHigh: pos.buyPrice,
+        dayHigh: pos.buyPrice,
+        dayLow: pos.buyPrice,
         distanceFromHighPct: 0,
         distanceFromLowPct: 0,
         isBreakOfStructure: false,
@@ -2048,6 +2093,26 @@ function renderPositions() {
     const hasFees = (pos.totalFeesNative || 0) > 0;
     const netGainFormatted = `${pos.netGainNative >= 0 ? "+" : ""}${formatCurrency(pos.netGainNative, pos.currency)}`;
 
+    const sharePriceFormatted = formatCurrency(pos.currentPrice, pos.currency);
+    const keySupportVal = pos.recentSwingLow || pos.buyPrice;
+    const keySupportFormatted = formatCurrency(keySupportVal, pos.currency);
+    const supportDiff = pos.currentPrice - keySupportVal;
+    const isUnderSupport = pos.currentPrice < (keySupportVal * 0.995);
+    const supportDiffPct = keySupportVal > 0 ? (supportDiff / keySupportVal) * 100 : 0;
+    const supportDiffSign = supportDiff >= 0 ? '+' : '';
+    const supportDiffFormatted = `${supportDiffSign}${formatCurrency(supportDiff, pos.currency)} (${supportDiffSign}${supportDiffPct.toFixed(1)}%)`;
+
+    const dayLow = Math.min(pos.dayLow || pos.currentPrice, pos.currentPrice);
+    const dayHigh = Math.max(pos.dayHigh || pos.currentPrice, pos.currentPrice);
+    const rangeSpan = dayHigh - dayLow;
+    const rangePercent = rangeSpan > 0.0001 ? Math.min(100, Math.max(0, ((pos.currentPrice - dayLow) / rangeSpan) * 100)) : 50;
+    const dayLowFormatted = formatCurrency(dayLow, pos.currency);
+    const dayHighFormatted = formatCurrency(dayHigh, pos.currency);
+
+    const todayChangeSign = pos.todayChangePercent >= 0 ? '+' : '';
+    const todayChangeClass = pos.todayChangePercent >= 0 ? 'up' : 'down';
+    const convertedCurrentRaw = pos.currency !== 'EUR' ? `(~${eurFormat.format(pos.currentValueEur)})` : '';
+
     const hadSellSignals = (pos.pastSellSignals || []).length > 0;
     const verdictClass = hadSellSignals ? "verdict-sell" : "verdict-hold";
     const verdictText = hadSellSignals
@@ -2110,19 +2175,79 @@ function renderPositions() {
           </div>
         </div>
 
+        <!-- LIVE MARKET & SUPPORT STRIP -->
+        <div class="pos-live-bar">
+          <div class="live-bar-col">
+            <div class="live-bar-label">
+              <span class="live-pulse-dot"></span>
+              <span>${t("liveSharePriceLabel")}</span>
+            </div>
+            <div class="live-bar-val-row">
+              <span class="live-share-price">${sharePriceFormatted}</span>
+              <span class="live-change-pill ${todayChangeClass}">
+                ${todayChangeSign}${pos.todayChangePercent.toFixed(2)}% ${t("todayLabelShort")}
+              </span>
+            </div>
+            <span class="live-bar-subtext">${t("liveActionSubtext")}</span>
+          </div>
+
+          <div class="live-bar-col">
+            <div class="live-bar-label">
+              <span>🛡️ ${t("keySupportLabel")}</span>
+            </div>
+            <div class="live-bar-val-row">
+              <span class="live-support-val">${keySupportFormatted}</span>
+              <span class="live-support-badge ${isUnderSupport ? 'under' : 'above'}">
+                ${isUnderSupport ? '🛑 ' + supportDiffFormatted : '✅ ' + supportDiffFormatted}
+              </span>
+            </div>
+            <span class="live-bar-subtext ${isUnderSupport ? 'text-danger' : 'text-success'}">
+              ${isUnderSupport ? t("statusUnderSupport") : t("statusAboveSupport")}
+            </span>
+          </div>
+
+          <div class="live-bar-col live-bar-range-col">
+            <div class="live-bar-label" style="justify-content: space-between;">
+              <span>📊 ${t("todayRangeLabel")}</span>
+              <span class="live-range-numbers">${t("dayMinShort")}: <strong>${dayLowFormatted}</strong> • ${t("dayMaxShort")}: <strong>${dayHighFormatted}</strong></span>
+            </div>
+            <div class="live-range-track-wrapper">
+              <div class="live-range-track">
+                <div class="live-range-fill" style="width: ${rangePercent.toFixed(1)}%;"></div>
+                <div class="live-range-marker" style="left: ${rangePercent.toFixed(1)}%;" title="${sharePriceFormatted}"></div>
+              </div>
+            </div>
+            <div class="live-range-legend">
+              <span>${dayLowFormatted}</span>
+              <span class="live-current-indicator">▲ ${sharePriceFormatted} (${rangePercent.toFixed(0)}%)</span>
+              <span>${dayHighFormatted}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="pos-metrics-grid">
           <div class="metric-card">
-            <span class="metric-card-label">${t("invested")}</span>
+            <span class="metric-card-label">${t("myInvestedCapital")}</span>
             <span class="metric-card-val">${investedFormatted}</span>
             ${convertedInvested}
           </div>
           <div class="metric-card">
-            <span class="metric-card-label">${t("currentValue")}</span>
+            <span class="metric-card-label">${t("myCurrentPortfolioVal")}</span>
             <span class="metric-card-val">${currentValFormatted}</span>
-            ${convertedCurrent}
+            <span class="metric-card-sub" style="font-weight:600; color:var(--text-main);">
+              ${t("sharesTimesPrice", { shares: pos.shares, price: sharePriceFormatted })}${convertedCurrentRaw ? ` • ${convertedCurrentRaw}` : ''}
+            </span>
           </div>
           <div class="metric-card">
-            <span class="metric-card-label">${hasFees ? t("netGain") : t("totalGain")}</span>
+            <span class="metric-card-label">${hasFees ? t("myNetProfitLabel") : t("totalGain")}</span>
+            <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
+              ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
+            </span>
+            <span class="metric-card-sub">
+              ${hasFees ? `${t("grossShort")}${gainFormatted}${convertedGain} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}` : (pos.currency !== "EUR" ? convertedGain : "")}
+            </span>
+          </div>
+        </div>
             <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
               ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
             </span>

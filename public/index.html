@@ -155,18 +155,22 @@
       <div class="cashout-summary-card">
         <div class="cashout-summary-header">
           <div>
-            <span class="card-label">GAINS TOTAUX ENCAISSÉS & ACQUIS</span>
+            <span class="card-label">RÉSULTAT NET TOTAL ENCAISSÉ (GAINS & PERTES)</span>
             <div class="cashout-total-number" id="cashOutTotalEur">+0,00 €</div>
-            <p class="cashout-subtext">Montants retirés du marché et définitivement sécurisés.</p>
+            <p class="cashout-subtext">Montants nets retirés du marché et définitivement enregistrés.</p>
           </div>
           <div class="cashout-stats">
             <div class="cashout-stat-box">
-              <span class="stat-box-label">Ventes réalisées</span>
+              <span class="stat-box-label">Ventes totales</span>
               <span class="stat-box-val" id="cashOutTotalSales">0</span>
             </div>
             <div class="cashout-stat-box">
               <span class="stat-box-label">Gains nets</span>
               <span class="stat-box-val text-success" id="cashOutWinCount">0</span>
+            </div>
+            <div class="cashout-stat-box">
+              <span class="stat-box-label">Pertes nettes</span>
+              <span class="stat-box-val text-danger" id="cashOutLossCount">0</span>
             </div>
           </div>
         </div>
@@ -242,7 +246,7 @@
             <small class="form-hint">Commission prélevée par Revolut.</small>
           </div>
           <div class="form-group">
-            <label>Gain net calculé à encaisser</label>
+            <label id="cashOutProfitLabel">Résultat net calculé (Gain / Perte)</label>
             <div id="cashOutCalculatedProfit" style="font-size:16px; font-weight:800; padding:10px; background:var(--card-sub-bg); border-radius:6px; color:var(--color-up); text-align:center;">+0,00 $US</div>
           </div>
         </div>

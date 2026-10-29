@@ -1425,16 +1425,24 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
     };
   }
 
-  // 3. Profit target reached -> Explicitly decide between VENDRE TOUT vs VENDRE PALIER 1 based on fees!
+  // 3. Profit target reached -> Explicitly decide between VENDRE TOUT vs VENDRE PALIER 1 based on fees & faltering!
   if (totalGainPercent >= targetProfit) {
+    const isFaltering = distanceFromHighPct <= -2.0 || consecutiveDown >= 1;
+    const falterTextEn = isFaltering
+      ? `Price starts faltering (${distanceFromHighPct.toFixed(1)}% from peak).`
+      : `Bullish momentum still intact.`;
+    const falterTextFr = isFaltering
+      ? `Le cours commence à vaciller (${distanceFromHighPct.toFixed(1)}% sous le sommet).`
+      : `Élan encore intact sur le pic.`;
+
     if (isSmallTrade) {
       return {
         action: "TAKE_PROFIT_ALL",
         label: t("sugSellAll"),
         badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Profit target met (+${totalGainPercent.toFixed(1)}%).\nSmall trade size: sell 100% in 1 order to save Revolut fees.`
-          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%).\nPetite position : vendre 100% en un ordre pour économiser les frais Revolut.`
+          ? `Target reached (+${totalGainPercent.toFixed(1)}%). ${falterTextEn}\nSmall trade size: sell 100% in 1 order to save Revolut fees.`
+          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%). ${falterTextFr}\nPetite position : vendre 100% en un ordre pour économiser les frais Revolut.`
       };
     } else {
       return {
@@ -1442,8 +1450,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
         label: t("sugSellTier"),
         badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Profit target met (+${totalGainPercent.toFixed(1)}%).\nSell 50% tier (${(shares * 0.5).toFixed(4)} shares) to bank profits.`
-          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%).\nVendre le palier 1 (50% des parts) pour sécuriser le gain.`
+          ? `Target reached (+${totalGainPercent.toFixed(1)}%). ${falterTextEn}\nSell 50% tier (${(shares * 0.5).toFixed(4)} shares) to bank profits.`
+          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%). ${falterTextFr}\nVendre le palier 1 (50% des parts) pour sécuriser le gain.`
       };
     }
   }
@@ -2970,6 +2978,15 @@ function updateCashOutCalculation() {
     profitEl.textContent = `${sign}${formatCurrency(netProfit, cur)} (${sign}${returnPct.toFixed(2)}%)`;
     profitEl.style.color = netProfit >= 0 ? 'var(--color-up)' : 'var(--color-down)';
   }
+
+  const profitLabel = document.getElementById('cashOutProfitLabel');
+  if (profitLabel) {
+    if (netProfit >= 0) {
+      profitLabel.textContent = currentLang === 'en' ? 'Calculated Net Profit to Cash Out' : 'Gain net calculé à encaisser';
+    } else {
+      profitLabel.textContent = currentLang === 'en' ? 'Calculated Net Loss to Realize' : 'Perte nette calculée à acter';
+    }
+  }
 }
 
 async function handleCashOutSubmit(e) {
@@ -3050,10 +3067,15 @@ async function handleCashOutSubmit(e) {
   await loadPortfolio(true);
   pushToCloud();
 
+  const isProfit = netProfit >= 0;
   alert(
     currentLang === 'en' 
-      ? `🎉 Cash Out recorded!\nNet profit: ${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit, cur)} (${netProfit >= 0 ? '+' : ''}${netProfitEur.toFixed(2)} €).\nMoved to "Realized Profits" tab.`
-      : `🎉 Encaissement enregistré avec succès !\nGain net : ${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit, cur)} (${netProfit >= 0 ? '+' : ''}${netProfitEur.toFixed(2)} €).\nVos gains sont désormais archivés dans l'onglet "Gains Encaissés".`
+      ? (isProfit
+          ? `🎉 Cash Out recorded!\nNet profit: +${formatCurrency(netProfit, cur)} (+${netProfitEur.toFixed(2)} €).\nMoved to "Realized Profits" tab.`
+          : `⚠️ Exit recorded with loss.\nNet loss: ${formatCurrency(netProfit, cur)} (${netProfitEur.toFixed(2)} €).\nArchived in "Realized Profits & Losses" tab.`)
+      : (isProfit
+          ? `🎉 Encaissement enregistré avec succès !\nGain net acquis : +${formatCurrency(netProfit, cur)} (+${netProfitEur.toFixed(2)} €).\nVos gains sont archivés dans l'onglet "Gains Encaissés".`
+          : `⚠️ Vente enregistrée avec perte.\nPerte nette actée : ${formatCurrency(netProfit, cur)} (${netProfitEur.toFixed(2)} €).\nCette clôture est archivée dans l'onglet "Gains Encaissés".`)
   );
 
   if (currentTab === 'cashout') {
@@ -3070,10 +3092,12 @@ function renderCashOutTab() {
   const totalEurEl = document.getElementById('cashOutTotalEur');
   const salesCountEl = document.getElementById('cashOutTotalSales');
   const winCountEl = document.getElementById('cashOutWinCount');
+  const lossCountEl = document.getElementById('cashOutLossCount');
   const listEl = document.getElementById('cashOutList');
 
   const totalNetProfitEur = cashOuts.reduce((acc, c) => acc + (c.netProfitEur || 0), 0);
   const winCount = cashOuts.filter(c => (c.netProfit || 0) > 0).length;
+  const lossCount = cashOuts.filter(c => (c.netProfit || 0) < 0).length;
 
   if (totalEurEl) {
     const sign = totalNetProfitEur >= 0 ? '+' : '';
@@ -3083,16 +3107,17 @@ function renderCashOutTab() {
 
   if (salesCountEl) salesCountEl.textContent = cashOuts.length;
   if (winCountEl) winCountEl.textContent = winCount;
+  if (lossCountEl) lossCountEl.textContent = lossCount;
 
   if (!listEl) return;
 
   if (cashOuts.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state">
-        <h3>${currentLang === 'en' ? 'No cash outs recorded yet' : 'Aucun encaissement pour l\'instant'}</h3>
+        <h3>${currentLang === 'en' ? 'No sales recorded yet' : 'Aucun encaissement pour l\'instant'}</h3>
         <p>${currentLang === 'en' 
-          ? 'When you take profits and sell a position (or a tier), click "Cash Out" on the active position card to secure and track your realized profits here.' 
-          : 'Quand vous réalisez un bénéfice et vendez une position (ou un palier), cliquez sur "Encaisser" pour enregistrer votre gain acquis ici.'}</p>
+          ? 'When you take profits or cut a position, click "Cash Out" on the active position card to archive your realized results here.' 
+          : 'Quand vous prenez vos bénéfices ou coupez une position, cliquez sur "Encaisser" pour enregistrer vos résultats acquis ici.'}</p>
       </div>
     `;
     return;
@@ -3105,6 +3130,9 @@ function renderCashOutTab() {
     const profitText = `${sign}${formatCurrency(item.netProfit, cur)}`;
     const eurEquiv = cur !== 'EUR' && item.netProfitEur !== undefined ? ` (${sign}${eurFormat.format(item.netProfitEur)})` : '';
     const dateFormatted = formatDate(item.soldDate);
+    const badgeLabel = isWin 
+      ? (currentLang === 'en' ? 'REALIZED NET PROFIT' : 'GAIN NET ACQUIS')
+      : (currentLang === 'en' ? 'REALIZED NET LOSS' : 'PERTE NETTE ACTÉE');
 
     return `
       <div class="cashout-item-card">
@@ -3125,11 +3153,11 @@ function renderCashOutTab() {
             <div style="font-size: 17px; font-weight: 800; color: ${isWin ? 'var(--color-up)' : 'var(--color-down)'};">
               ${profitText}${eurEquiv}
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">
-              ${currentLang === 'en' ? 'REALIZED NET PROFIT' : 'GAIN NET ACQUIS'}
+            <div style="font-size: 11px; color: ${isWin ? 'var(--color-up)' : 'var(--color-down)'}; font-weight: 700;">
+              ${badgeLabel}
             </div>
           </div>
-          <button class="btn-ghost-danger" onclick="deleteCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Delete this record' : 'Supprimer cet encaissement'}" style="padding: 6px 10px;">🗑️</button>
+          <button class="btn-ghost-danger" onclick="deleteCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Delete this record' : 'Supprimer cet enregistrement'}" style="padding: 6px 10px;">🗑️</button>
         </div>
       </div>
     `;

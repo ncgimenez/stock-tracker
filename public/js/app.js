@@ -1419,9 +1419,9 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
     console.warn(`Fetch live pour ${symbol} :`, err.message);
   }
 
-  // If ticker has no dot and failed, try with European exchange suffix (.DE for XETRA/Frankfurt or .PA for Paris)
+  // If ticker has no dot and failed, try with European exchange suffix (.DE for Germany, .AS for Amsterdam, .PA for Paris, .L for London)
   if (!symbol.includes('.')) {
-    for (const suffix of ['.DE', '.PA']) {
+    for (const suffix of ['.DE', '.AS', '.PA', '.L']) {
       try {
         const altUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol + suffix)}?range=3mo&interval=1d`;
         const altProxy = `https://proxy.cors.dev/${altUrl}`;

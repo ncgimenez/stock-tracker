@@ -1375,8 +1375,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
       label: t("sugCutAll"),
       badgeClass: "badge-danger",
       reason: currentLang === "en"
-        ? `Total loss of ${totalGainPercent.toFixed(1)}% (stop-loss threshold: ${stopLoss}%). Cut 100% of position to protect capital.`
-        : `Perte globale de ${totalGainPercent.toFixed(1)}% (seuil stop-loss: ${stopLoss}%). Coupez 100% de la position pour protéger votre capital.`
+        ? `Stop-Loss reached (${totalGainPercent.toFixed(1)}% vs ${stopLoss}%).\nCut 100% to protect capital.`
+        : `Seuil Stop-Loss atteint (${totalGainPercent.toFixed(1)}% vs ${stopLoss}%).\nCouper 100% pour protéger le capital.`
     };
   }
 
@@ -1388,8 +1388,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
       label: t("sugCutAll"),
       badgeClass: "badge-danger",
       reason: currentLang === "en"
-        ? `Break of Structure: Price broke below key support (${formattedLow}). Uptrend is broken: cut 100% without emotion.`
-        : `Rupture de structure : le cours a cassé son creux de support (${formattedLow}). La dynamique haussière est brisée : coupez 100% de la position sans émotion.`
+        ? `Break of Structure: Below key support (${formattedLow}).\nUptrend is broken: cut 100%.`
+        : `Rupture de structure : sous le support clé (${formattedLow}).\nTendance haussière brisée : couper 100%.`
     };
   }
 
@@ -1401,8 +1401,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
         label: t("sugSellAll"),
         badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Profit target met (+${totalGainPercent.toFixed(1)}%). Small trade size: sell 100% of shares in one order to avoid paying Revolut fees twice.`
-          : `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}%). Montant de petite taille : vendez 100% de vos parts en un seul ordre pour éviter de payer deux fois les frais Revolut de ${formatCurrency(sellFee, currency)}.`
+          ? `Profit target met (+${totalGainPercent.toFixed(1)}%).\nSmall trade size: sell 100% in 1 order to save Revolut fees.`
+          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%).\nPetite position : vendre 100% en un ordre pour économiser les frais Revolut.`
       };
     } else {
       return {
@@ -1410,8 +1410,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
         label: t("sugSellTier"),
         badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Profit target met (+${totalGainPercent.toFixed(1)}%). Sell 50% tier (${(shares * 0.5).toFixed(4)} shares) to bank profits. Keep remainder risk-free.`
-          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%). Vendez le palier 1 (50% des parts, soit ${(shares * 0.5).toFixed(4)} parts) pour encaisser ${formatCurrency(currentValueNative * 0.5, currency)}. Gardez le reste sans risque avec un stop au prix d'achat.`
+          ? `Profit target met (+${totalGainPercent.toFixed(1)}%).\nSell 50% tier (${(shares * 0.5).toFixed(4)} shares) to bank profits.`
+          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%).\nVendre le palier 1 (50% des parts) pour sécuriser le gain.`
       };
     }
   }
@@ -1423,8 +1423,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
       label: t("sugNearHigh"),
       badgeClass: "badge-success",
       reason: currentLang === "en"
-        ? `Trading near peak (${formatCurrency(highestClose, currency)}). Uptrend structure is pristine (higher highs & lows). Hold firmly.`
-        : `Sur les sommets (${formatCurrency(highestClose, currency)}). Structure haussière intacte (creux et sommets montants). Gardez fermement.`
+        ? `Trading near peak (${formatCurrency(highestClose, currency)}).\nBullish structure intact: hold firmly.`
+        : `Proche du sommet (${formatCurrency(highestClose, currency)}).\nStructure haussière intacte : conserver.`
     };
   }
 

@@ -1337,6 +1337,7 @@ async function buildPortfolioData() {
       const investedEur = investedNative * posToEurRate;
       const currentValueEur = currentValueNative * posToEurRate;
       const todayChangeEur = todayChangeNative * posToEurRate;
+      const totalGainEur = currentValueEur - investedEur;
 
       totalInvestedEur += investedEur;
       totalCurrentValueEur += currentValueEur;
@@ -1369,11 +1370,16 @@ async function buildPortfolioData() {
         notes: pos.notes || ""
       };
     } catch (err) {
-      console.warn(`Erreur calcul pour ${pos.symbol}:`, err.message);
+      console.error(`Erreur calcul pour ${pos.symbol}:`, err);
       const posCurrency = (pos.currency || "EUR").toUpperCase();
-      const investedNative = parseFloat(pos.investedAmount) || 0;
+      const shares = parseFloat(pos.shares) || 0;
+      const buyPrice = parseFloat(pos.buyPrice) || 0;
+      const investedNative = parseFloat(pos.investedAmount) || (shares * buyPrice) || 0;
       const posToEur = posCurrency === "USD" ? 0.92 : (posCurrency === "GBP" ? 1.18 : 1.0);
       const investedEur = investedNative * posToEur;
+
+      totalInvestedEur += investedEur;
+      totalCurrentValueEur += investedEur;
 
       return {
         id: pos.id,
@@ -1409,9 +1415,9 @@ async function buildPortfolioData() {
     }
   }));
 
-  const totalGainEur = totalCurrentValueEur - totalInvestedEur;
-  const totalGainPercent = totalInvestedEur > 0 ? (totalGainEur / totalInvestedEur) * 100 : 0;
-  const totalDayGainPercent = totalCurrentValueEur > 0 && (totalCurrentValueEur - totalDayGainEur) > 0
+  const summaryGainEur = totalCurrentValueEur - totalInvestedEur;
+  const summaryGainPercent = totalInvestedEur > 0 ? (summaryGainEur / totalInvestedEur) * 100 : 0;
+  const summaryDayGainPercent = totalCurrentValueEur > 0 && (totalCurrentValueEur - totalDayGainEur) > 0
     ? (totalDayGainEur / (totalCurrentValueEur - totalDayGainEur)) * 100
     : 0;
 
@@ -1419,10 +1425,10 @@ async function buildPortfolioData() {
     summary: {
       totalInvestedEur,
       totalCurrentValueEur,
-      totalGainEur,
-      totalGainPercent,
+      totalGainEur: summaryGainEur,
+      totalGainPercent: summaryGainPercent,
       totalDayGainEur,
-      totalDayGainPercent,
+      totalDayGainPercent: summaryDayGainPercent,
       positionsCount: enrichedPositions.length,
       lastSync: new Date().toISOString()
     },
@@ -1626,6 +1632,7 @@ function renderPositions() {
     const gainFormatted = `${pos.totalGainNative >= 0 ? "+" : ""}${formatCurrency(pos.totalGainNative, pos.currency)}`;
     const convertedInvested = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.investedEur)})</span>` : "";
     const convertedCurrent = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.currentValueEur)})</span>` : "";
+    const convertedGain = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${pos.totalGainEur >= 0 ? "+" : ""}${eurFormat.format(pos.totalGainEur)})</span>` : "";
 
     return `
       <article class="pos-card" data-id="${pos.id}">
@@ -1654,6 +1661,7 @@ function renderPositions() {
               <span class="pill-badge ${pos.totalGainPercent >= 0 ? "up" : "down"}">
                 ${gainFormatted} (${pctFormat(pos.totalGainPercent)})
               </span>
+              ${convertedGain}
             </div>
           </div>
         </div>

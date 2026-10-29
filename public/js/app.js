@@ -186,6 +186,22 @@ const I18N = {
     highPeak: "Sommet (30j)",
     keySupport: "Support clé",
     distanceFromHigh: "du sommet",
+    journeyTitle: "Parcours du trade & Analyse rétrospective",
+    verdictHealthy: "🛡️ Tendance saine • Aucun signal de vente déclenché",
+    verdictHadSell: "⚠️ Signal de vente déclenché dans le passé",
+    nodeBuyLabel: "📍 Achat ({date})",
+    nodePeakLabel: "⭐ Sommet Max ({date})",
+    nodePeakDesc: "Meilleur moment passé pour vendre",
+    nodeSupportLabel: "🛡️ Seuil de Vente (Creux)",
+    nodeSupportDesc: "Vendre si cassé",
+    nodeCurrentLabel: "🟢 Cours Actuel",
+    nodeCurrentAtHigh: "Au plus haut historique",
+    markerBuy: "📍 Achat",
+    markerPeak: "⭐ Sommet",
+    markerSell: "🛑 Signal Vente",
+    grossShort: "Brut : ",
+    feesShort: "Frais : ",
+    currentValueEurText: "Valeur : ",
     // Settings
     settingsTitle: "Critères de Recommandation",
     settingsProfitTarget: "Objectif de prise de bénéfices (Gain global)",
@@ -295,6 +311,22 @@ const I18N = {
     highPeak: "High (30d)",
     keySupport: "Key support",
     distanceFromHigh: "from high",
+    journeyTitle: "Trade Journey & Past Sell Signals",
+    verdictHealthy: "🛡️ Healthy Trend • No sell signal triggered",
+    verdictHadSell: "⚠️ Sell signal was triggered in the past",
+    nodeBuyLabel: "📍 Bought ({date})",
+    nodePeakLabel: "⭐ Peak Exit ({date})",
+    nodePeakDesc: "Best past moment to sell",
+    nodeSupportLabel: "🛡️ Exit Threshold (Low)",
+    nodeSupportDesc: "Sell if broken",
+    nodeCurrentLabel: "🟢 Current Price",
+    nodeCurrentAtHigh: "At all-time high",
+    markerBuy: "📍 Bought",
+    markerPeak: "⭐ Peak",
+    markerSell: "🛑 Sell Signal",
+    grossShort: "Gross: ",
+    feesShort: "Fees: ",
+    currentValueEurText: "Value: ",
     // Settings
     settingsTitle: "Recommendation Rules",
     settingsProfitTarget: "Profit taking target (Total gain)",
@@ -1459,6 +1491,36 @@ async function buildPortfolioData() {
       const isBreakOfStructure = recentSwingLow > 0 && currentPriceInPosCurrency < (recentSwingLow * 0.995);
       const isNearHigh = highestClose > 0 && distanceFromHighPct >= -2.0;
 
+      // Historical Performance & Sell Milestones since Purchase
+      let peakSinceBuy = { close: buyPrice, dateStr: pos.buyDate || '', gainPct: 0, gainNative: 0 };
+      const pastSellSignals = [];
+
+      const closesSinceBuy = dailyBreakdown.filter(d => !pos.buyDate || d.dateStr >= pos.buyDate);
+      closesSinceBuy.forEach(day => {
+        const dayGainNative = (day.close * shares) - investedNative;
+        const dayGainPct = investedNative > 0 ? (dayGainNative / investedNative) * 100 : 0;
+        if (day.close > peakSinceBuy.close) {
+          peakSinceBuy = {
+            close: day.close,
+            dateStr: day.dateStr,
+            gainPct: dayGainPct,
+            gainNative: dayGainNative
+          };
+        }
+      });
+
+      // Check historical sell signals since buy date
+      for (let i = 1; i < closesSinceBuy.length; i++) {
+        const d = closesSinceBuy[i];
+        if (recentSwingLow > 0 && d.close < (recentSwingLow * 0.995)) {
+          pastSellSignals.push({
+            dateStr: d.dateStr,
+            close: d.close,
+            reason: `Cassure de creux support (${formatCurrency(recentSwingLow, posCurrency)})`
+          });
+        }
+      }
+
       const suggestion = evaluateSuggestionClient(
         totalGainPercent,
         todayChangePercent,
@@ -1511,6 +1573,8 @@ async function buildPortfolioData() {
         distanceFromHighPct,
         distanceFromLowPct,
         isBreakOfStructure,
+        peakSinceBuy,
+        pastSellSignals,
         currentPrice: currentPriceInPosCurrency,
         currentValueNative,
         currentValueEur,
@@ -1567,6 +1631,8 @@ async function buildPortfolioData() {
         distanceFromHighPct: 0,
         distanceFromLowPct: 0,
         isBreakOfStructure: false,
+        peakSinceBuy: { close: buyPrice, dateStr: pos.buyDate, gainPct: 0, gainNative: 0 },
+        pastSellSignals: [],
         currentPrice: pos.buyPrice,
         currentValueNative: investedNative,
         currentValueEur: investedEur,
@@ -1780,20 +1846,33 @@ function renderPositions() {
       const changeClass = isUp ? "up" : (isDown ? "down" : "flat");
       const arrow = isUp ? "▲" : (isDown ? "▼" : "—");
       const dayLabel = formatDayLabel(day.dateStr, idx);
+
       const isBuyDay = day.dateStr === pos.buyDate;
-      const buyMarkerHtml = isBuyDay
-        ? `<span class="buy-marker-tag" style="display:inline-block; font-size:10px; font-weight:700; color:var(--color-up); background:rgba(16,185,129,0.18); padding:1px 5px; border-radius:4px; margin-top:3px;">${t("boughtTodayMarker")}</span>`
-        : "";
+      const isPeakDay = pos.peakSinceBuy && day.dateStr === pos.peakSinceBuy.dateStr && pos.peakSinceBuy.gainPct > 0.5;
+      const isSellSignalDay = (pos.pastSellSignals || []).some(s => s.dateStr === day.dateStr);
+
+      let milestoneTag = "";
+      let milestoneClass = "";
+      if (isPeakDay) {
+        milestoneTag = `<span class="day-marker-tag tag-peak">${t("markerPeak")} (+${pos.peakSinceBuy.gainPct.toFixed(1)}%)</span>`;
+        milestoneClass = "is-peak";
+      } else if (isSellSignalDay) {
+        milestoneTag = `<span class="day-marker-tag tag-sell">${t("markerSell")}</span>`;
+        milestoneClass = "is-sell-signal";
+      } else if (isBuyDay) {
+        milestoneTag = `<span class="day-marker-tag tag-buy">${t("markerBuy")}</span>`;
+        milestoneClass = "is-buy";
+      }
 
       return `
-        <div class="day-cell ${trendClass}">
+        <div class="day-cell ${trendClass} ${milestoneClass}">
           <span class="day-cell-date">${dayLabel}</span>
           <span class="day-cell-close">${formatCurrency(day.close, pos.currency)}</span>
           <span class="day-cell-change ${changeClass}">
             ${arrow} ${pctFormat(day.changePct)}
           </span>
           <span class="day-cell-val">${t("portfolioText")}${formatCurrency(day.dayValue, pos.currency)}</span>
-          ${buyMarkerHtml}
+          ${milestoneTag}
         </div>
       `;
     }).join("");
@@ -1805,32 +1884,53 @@ function renderPositions() {
     const investedFormatted = formatCurrency(pos.investedNative, pos.currency);
     const currentValFormatted = formatCurrency(pos.currentValueNative, pos.currency);
     const gainFormatted = `${pos.totalGainNative >= 0 ? "+" : ""}${formatCurrency(pos.totalGainNative, pos.currency)}`;
-    const convertedInvested = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.investedEur)})</span>` : "";
-    const convertedCurrent = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.currentValueEur)})</span>` : "";
-    const convertedGain = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${pos.totalGainEur >= 0 ? "+" : ""}${eurFormat.format(pos.totalGainEur)})</span>` : "";
+    const convertedInvested = pos.currency !== "EUR" ? `<span class="metric-card-sub">(~${eurFormat.format(pos.investedEur)})</span>` : "";
+    const convertedCurrent = pos.currency !== "EUR" ? `<span class="metric-card-sub">(~${eurFormat.format(pos.currentValueEur)})</span>` : "";
+    const convertedGain = pos.currency !== "EUR" ? ` (~${pos.totalGainEur >= 0 ? "+" : ""}${eurFormat.format(pos.totalGainEur)})` : "";
 
     const hasFees = (pos.totalFeesNative || 0) > 0;
     const netGainFormatted = `${pos.netGainNative >= 0 ? "+" : ""}${formatCurrency(pos.netGainNative, pos.currency)}`;
-    const convertedNetGain = pos.currency !== "EUR" && hasFees
-      ? `<span style="font-size:10px; color:var(--text-muted); display:inline-block; margin-left:3px;">(~${pos.netGainEur >= 0 ? "+" : ""}${eurFormat.format(pos.netGainEur)})</span>`
-      : "";
 
-    const feesNoticeHtml = hasFees
-      ? `<div style="font-size:11px; margin-top:6px; padding-top:4px; border-top:1px dashed var(--card-border); color:var(--text-muted); line-height:1.35;">
-          <span>${t("netGain")} : <strong style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${netGainFormatted} (${pctFormat(pos.netGainPercent)})</strong>${convertedNetGain}</span>
-          <span style="display:block; font-size:10px; opacity:0.85;">${t("totalFeesLabel")}${formatCurrency(pos.totalFeesNative, pos.currency)} (${t("afterFees")})</span>
-        </div>`
-      : "";
+    const hadSellSignals = (pos.pastSellSignals || []).length > 0;
+    const verdictClass = hadSellSignals ? "verdict-sell" : "verdict-hold";
+    const verdictText = hadSellSignals
+      ? `⚠️ ${pos.pastSellSignals.length} ${t("verdictHadSell")}`
+      : t("verdictHealthy");
 
-    const highFormatted = formatCurrency(pos.highestClose || 0, pos.currency);
-    const lowFormatted = formatCurrency(pos.recentSwingLow || 0, pos.currency);
-    const distHighText = `${(pos.distanceFromHighPct || 0) >= -0.1 ? "0.0%" : (pos.distanceFromHighPct || 0).toFixed(1) + "%"}`;
-    const structureBar = (pos.highestClose > 0) ? `
-      <div class="market-structure-bar" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:11px; padding:7px 12px; background:rgba(255,255,255,0.03); border-radius:8px; margin:12px 0 4px 0; border:1px solid var(--card-border);">
-        <span>🏔️ <strong style="color:var(--text-main);">${t("highPeak")} :</strong> ${highFormatted} <span style="color:var(--text-muted);">(${distHighText} ${t("distanceFromHigh")})</span></span>
-        <span>🛡️ <strong style="color:var(--text-main);">${t("keySupport")} :</strong> ${lowFormatted}</span>
+    const peakDateFormatted = pos.peakSinceBuy?.dateStr ? formatDate(pos.peakSinceBuy.dateStr) : "";
+    const peakPriceFormatted = formatCurrency(pos.peakSinceBuy?.close || pos.buyPrice, pos.currency);
+    const peakGainText = pos.peakSinceBuy ? `+${pos.peakSinceBuy.gainPct.toFixed(1)}% (+${formatCurrency(pos.peakSinceBuy.gainNative, pos.currency)})` : "";
+
+    const journeyHtml = `
+      <div class="trade-journey">
+        <div class="journey-header">
+          <span class="journey-title">🧭 ${t("journeyTitle")}</span>
+          <span class="journey-verdict ${verdictClass}">${verdictText}</span>
+        </div>
+        <div class="journey-timeline">
+          <div class="journey-node node-buy">
+            <span class="node-label">${t("nodeBuyLabel", { date: formatDate(pos.buyDate) })}</span>
+            <span class="node-val">${formatCurrency(pos.buyPrice, pos.currency)}</span>
+            <span class="node-sub">${pos.shares} ${t("sharesText")}</span>
+          </div>
+          <div class="journey-node node-peak">
+            <span class="node-label">${t("nodePeakLabel", { date: peakDateFormatted || t("today") })}</span>
+            <span class="node-val">${peakPriceFormatted}</span>
+            <span class="node-sub" style="color:var(--color-up); font-weight:700;">${peakGainText}</span>
+          </div>
+          <div class="journey-node node-support">
+            <span class="node-label">${t("nodeSupportLabel")}</span>
+            <span class="node-val">${formatCurrency(pos.recentSwingLow || 0, pos.currency)}</span>
+            <span class="node-sub">${t("nodeSupportDesc")}</span>
+          </div>
+          <div class="journey-node node-current">
+            <span class="node-label">${t("nodeCurrentLabel")}</span>
+            <span class="node-val">${formatCurrency(pos.currentPrice, pos.currency)}</span>
+            <span class="node-sub">${pos.distanceFromHighPct >= -0.1 ? t("nodeCurrentAtHigh") : `${pos.distanceFromHighPct.toFixed(1)}% ${t("distanceFromHigh")}`}</span>
+          </div>
+        </div>
       </div>
-    ` : "";
+    `;
 
     return `
       <article class="pos-card" data-id="${pos.id}">
@@ -1843,35 +1943,45 @@ function renderPositions() {
             </div>
           </div>
 
-          <div class="pos-metrics-group">
-            <div class="pos-metric-box">
-              <span class="metric-label">${t("invested")}</span>
-              <span class="metric-value">${investedFormatted}</span>
-              ${convertedInvested}
-            </div>
-            <div class="pos-metric-box">
-              <span class="metric-label">${t("currentValue")}</span>
-              <span class="metric-value">${currentValFormatted}</span>
-              ${convertedCurrent}
-            </div>
-            <div class="pos-metric-box">
-              <span class="metric-label">${hasFees ? t("grossGain") : t("totalGain")}</span>
-              <span class="pill-badge ${pos.totalGainPercent >= 0 ? "up" : "down"}">
-                ${gainFormatted} (${pctFormat(pos.totalGainPercent)})
-              </span>
-              ${convertedGain}
-              ${feesNoticeHtml}
-            </div>
+          <div>
+            <span class="suggestion-badge ${sug.badgeClass || "badge-neutral"}" style="font-size:12px; font-weight:800; padding:6px 12px;">
+              ${escapeHtml(sug.label || t("sugHold"))}
+            </span>
           </div>
         </div>
 
-        ${structureBar}
+        <div class="pos-metrics-grid">
+          <div class="metric-card">
+            <span class="metric-card-label">${t("invested")}</span>
+            <span class="metric-card-val">${investedFormatted}</span>
+            ${convertedInvested}
+          </div>
+          <div class="metric-card">
+            <span class="metric-card-label">${t("currentValue")}</span>
+            <span class="metric-card-val">${currentValFormatted}</span>
+            ${convertedCurrent}
+          </div>
+          <div class="metric-card">
+            <span class="metric-card-label">${hasFees ? t("netGain") : t("totalGain")}</span>
+            <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
+              ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
+            </span>
+            <span class="metric-card-sub">
+              ${hasFees ? `${t("grossShort")}${gainFormatted}${convertedGain} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}` : (pos.currency !== "EUR" ? convertedGain : "")}
+            </span>
+          </div>
+        </div>
+
+        ${journeyHtml}
 
         <div class="suggestion-banner ${bannerClass}">
           <div style="display: flex; align-items: center; gap: 10px;">
             <span class="suggestion-badge ${sug.badgeClass || "badge-neutral"}">
               ${escapeHtml(sug.label || t("sugHold"))}
             </span>
+            <span class="suggestion-reason">${escapeHtml(sug.reason || "")}</span>
+          </div>
+        </div>
             <span class="suggestion-reason">${escapeHtml(sug.reason || "")}</span>
           </div>
         </div>

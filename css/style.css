@@ -483,6 +483,186 @@ body {
   color: var(--text-main);
 }
 
+/* --- METRICS GRID (CLEAN APPLE CARDS) --- */
+.pos-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+@media (max-width: 640px) {
+  .pos-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+.metric-card {
+  background: var(--card-sub-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: border-color 0.15s ease;
+}
+.metric-card:hover {
+  border-color: var(--card-border-hover);
+}
+.metric-card-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.metric-card-val {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+.metric-card-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+/* --- TRADE JOURNEY STEPPER (HISTORICAL REPLAY) --- */
+.trade-journey {
+  background: var(--card-sub-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin: 12px 0 14px 0;
+}
+
+.journey-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.journey-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.journey-verdict {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.journey-verdict.verdict-hold {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-up);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.journey-verdict.verdict-sell {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-down);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.journey-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.journey-node {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.journey-node.node-buy {
+  border-left: 3px solid var(--color-up);
+}
+.journey-node.node-peak {
+  border-left: 3px solid #eab308;
+  background: rgba(234, 179, 8, 0.04);
+}
+.journey-node.node-support {
+  border-left: 3px solid var(--color-blue);
+}
+.journey-node.node-current {
+  border-left: 3px solid var(--text-muted);
+}
+
+.node-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.node-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.node-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Highlighted Milestones in Day Strip */
+.day-cell.is-buy {
+  border: 1.5px solid var(--color-up) !important;
+  background: rgba(16, 185, 129, 0.08);
+}
+.day-cell.is-peak {
+  border: 1.5px solid #eab308 !important;
+  background: rgba(234, 179, 8, 0.08);
+}
+.day-cell.is-sell-signal {
+  border: 1.5px solid var(--color-down) !important;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.day-marker-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+.day-marker-tag.tag-buy {
+  color: var(--color-up);
+  background: rgba(16, 185, 129, 0.2);
+}
+.day-marker-tag.tag-peak {
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.2);
+}
+.day-marker-tag.tag-sell {
+  color: var(--color-down);
+  background: rgba(239, 68, 68, 0.2);
+}
+
 /* --- SUGGESTION BANNER --- */
 .suggestion-banner {
   display: flex;

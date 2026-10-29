@@ -2193,6 +2193,9 @@ function renderPositions() {
     `;
 
     const isCardCompact = viewMode === 'compact' && !expandedPositionIds.has(pos.id);
+    const feeCheckBadge = (pos.feeVerified === false && (!pos.buyFee || pos.buyFee === 0))
+      ? ` • <span class="badge badge-warning" style="font-size:10px; cursor:pointer; padding:2px 6px;" onclick="editPosition('${pos.id}')" title="Cliquez pour ajuster si Revolut vous a prélevé des frais">⚠️ ${currentLang === 'en' ? 'Check fees (0)' : 'Frais à vérifier (0 €)'}</span>`
+      : '';
 
     return `
       <article class="pos-card ${isCardCompact ? 'is-compact' : ''}" data-id="${pos.id}">
@@ -2201,7 +2204,7 @@ function renderPositions() {
             <span class="pos-symbol-pill">${escapeHtml(pos.symbol)}</span>
             <div>
               <h3 class="pos-name">${escapeHtml(pos.name)}</h3>
-              <p class="pos-meta">${t("boughtOn")} ${formatDate(pos.buyDate)}${timeText}${holdingBadge} • ${pos.shares} ${t("sharesText")} @ ${formatCurrency(pos.buyPrice, pos.currency)}</p>
+              <p class="pos-meta">${t("boughtOn")} ${formatDate(pos.buyDate)}${timeText}${holdingBadge} • ${pos.shares} ${t("sharesText")} @ ${formatCurrency(pos.buyPrice, pos.currency)}${feeCheckBadge}</p>
             </div>
           </div>
 
@@ -2489,6 +2492,7 @@ async function handleFormSubmit(e) {
     buyPrice,
     buyFee,
     sellFee,
+    feeVerified: true,
     notes
   };
 
@@ -2756,6 +2760,7 @@ function parseRevolutCSV(text) {
       buyPrice: p.shares > 0 ? Math.round((p.investedAmount / p.shares) * 100) / 100 : 0,
       buyFee: Math.round((p.buyFee || 0) * 100) / 100,
       sellFee: Math.round((p.buyFee || 0) * 100) / 100,
+      feeVerified: (p.buyFee > 0),
       notes: "Importé depuis relevé Revolut"
     }));
 }
@@ -2998,7 +3003,13 @@ function updateCashOutCalculation() {
 
   if (profitEl) {
     const sign = netProfit >= 0 ? '+' : '';
-    profitEl.textContent = `${sign}${formatCurrency(netProfit, cur)} (${sign}${returnPct.toFixed(2)}%)`;
+    const grossSign = grossProfit >= 0 ? '+' : '';
+    profitEl.innerHTML = `
+      <div style="font-size:17px; font-weight:800;">${sign}${formatCurrency(netProfit, cur)} (${sign}${returnPct.toFixed(2)}%)</div>
+      <div style="font-size:11px; font-weight:500; color:var(--text-muted); margin-top:4px; line-height:1.4;">
+        ${currentLang === 'en' ? 'Gross' : 'Brut'} : <strong>${grossSign}${formatCurrency(grossProfit, cur)}</strong> • ${currentLang === 'en' ? 'Buy fee' : 'Frais achat'} : -${formatCurrency(allocBuyFee, cur)} • ${currentLang === 'en' ? 'Sell fee' : 'Frais vente'} : -${formatCurrency(sellFee, cur)}
+      </div>
+    `;
     profitEl.style.color = netProfit >= 0 ? 'var(--color-up)' : 'var(--color-down)';
   }
 

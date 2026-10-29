@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stock & Crypto Tracker — Suivi Revolut Simplifié</title>
   <meta name="description" content="Suivi d'actions et cryptos Revolut sans graphiques. Dynamique jour par jour et suggestions d'action (Acheter / Garder / Vendre).">
-  <link rel="stylesheet" href="./css/style.css?v=2.7">
+  <link rel="stylesheet" href="./css/style.css?v=2.8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -255,9 +255,9 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="cashOutFee">Frais de vente Revolut payés</label>
-            <input type="number" id="cashOutFee" step="any" min="0" placeholder="Ex: 1.17">
-            <small class="form-hint">Commission prélevée par Revolut.</small>
+            <label for="cashOutFee">Frais de vente Revolut à déduire</label>
+            <input type="number" id="cashOutFee" step="any" min="0" placeholder="0.00" style="height:40px; font-weight:700;">
+            <small class="form-hint" style="color:var(--text-muted); font-size:11px;">⚠️ Indiquez les frais réels prélevés par Revolut (0,00 si gratuit, ou 1,00 € / 1,17 $).</small>
           </div>
           <div class="form-group">
             <label id="cashOutProfitLabel">Résultat net calculé (Gain / Perte)</label>
@@ -576,6 +576,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=2.7"></script>
+  <script src="./js/app.js?v=2.8"></script>
 </body>
 </html>

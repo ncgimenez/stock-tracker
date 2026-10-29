@@ -51,6 +51,21 @@
       </div>
     </header>
 
+    <!-- MAIN NAVIGATION TABS -->
+    <nav class="main-nav-tabs" id="mainNavTabs">
+      <button class="nav-tab-btn active" data-tab="active">
+        <span>📊 Portefeuille Actif</span>
+        <span class="nav-tab-badge" id="activeCountBadge">0</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="cashout">
+        <span>💰 Gains Encaissés (Cash Out)</span>
+        <span class="nav-tab-badge badge-green" id="cashOutCountBadge">0</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="ideas">
+        <span>💡 Idées Revolut</span>
+      </button>
+    </nav>
+
     <!-- PORTFOLIO SUMMARY CARDS -->
     <section class="summary-grid" id="summaryGrid">
       <div class="summary-card">
@@ -92,31 +107,42 @@
     </section>
 
     <!-- CONTROLS & TIMEFRAME SELECTOR -->
-    <section class="controls-bar">
+    <section class="controls-bar" id="activeControlsBar">
+      <div class="filter-pills-group" id="filterPillsGroup">
+        <button class="filter-pill-btn active" data-filter="all">Tous (<span id="filterAllCount">0</span>)</button>
+        <button class="filter-pill-btn filter-green" data-filter="gain">🟢 En gain (<span id="filterGainCount">0</span>)</button>
+        <button class="filter-pill-btn filter-red" data-filter="loss">🔴 En perte (<span id="filterLossCount">0</span>)</button>
+      </div>
+
+      <div class="view-toggle-wrapper">
+        <button class="btn btn-secondary view-toggle-btn" id="viewModeToggleBtn" title="Basculer vue compacte / vue détaillée">
+          <span id="viewModeIcon">👁️</span> <span id="viewModeText">Vue Compacte</span>
+        </button>
+      </div>
+
       <div class="timeframe-selector">
-        <span class="control-label">Historique jour par jour :</span>
+        <span class="control-label">Historique :</span>
         <div class="pill-group" id="timeframePills">
-          <button class="pill-btn active" data-days="7">7 jours</button>
-          <button class="pill-btn" data-days="14">2 semaines</button>
-          <button class="pill-btn" data-days="21">3 semaines</button>
-          <button class="pill-btn" data-days="30">1 mois</button>
+          <button class="pill-btn active" data-days="7">7j</button>
+          <button class="pill-btn" data-days="14">14j</button>
+          <button class="pill-btn" data-days="30">30j</button>
         </div>
       </div>
 
       <div class="filter-controls">
         <div class="select-wrapper">
           <select id="sortSelect" class="clean-select">
-            <option value="gain_desc">Trier par : Plus gros gains</option>
-            <option value="gain_asc">Trier par : Moins performants</option>
-            <option value="today_desc">Trier par : Meilleure hausse du jour</option>
-            <option value="today_asc">Trier par : Plus forte baisse du jour</option>
-            <option value="name_asc">Trier par : Nom (A-Z)</option>
+            <option value="gain_desc">Trier : Plus gros gains</option>
+            <option value="gain_asc">Trier : Moins performants</option>
+            <option value="today_desc">Trier : Hausse du jour</option>
+            <option value="today_asc">Trier : Baisse du jour</option>
+            <option value="name_asc">Trier : Nom (A-Z)</option>
           </select>
         </div>
       </div>
     </section>
 
-    <!-- POSITIONS LIST CONTAINER -->
+    <!-- POSITIONS LIST CONTAINER (ACTIVE TAB) -->
     <main class="positions-container" id="positionsContainer">
       <div class="loading-state" id="loadingState">
         <div class="spinner"></div>
@@ -124,6 +150,109 @@
       </div>
     </main>
 
+    <!-- CASH OUT / REALIZED PROFITS TAB CONTENT -->
+    <section class="tab-content" id="cashOutTabSection" style="display: none;">
+      <div class="cashout-summary-card">
+        <div class="cashout-summary-header">
+          <div>
+            <span class="card-label">GAINS TOTAUX ENCAISSÉS & ACQUIS</span>
+            <div class="cashout-total-number" id="cashOutTotalEur">+0,00 €</div>
+            <p class="cashout-subtext">Montants retirés du marché et définitivement sécurisés.</p>
+          </div>
+          <div class="cashout-stats">
+            <div class="cashout-stat-box">
+              <span class="stat-box-label">Ventes réalisées</span>
+              <span class="stat-box-val" id="cashOutTotalSales">0</span>
+            </div>
+            <div class="cashout-stat-box">
+              <span class="stat-box-label">Gains nets</span>
+              <span class="stat-box-val text-success" id="cashOutWinCount">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cashout-list" id="cashOutList">
+        <div class="empty-state">
+          <h3>Aucun encaissement pour l'instant</h3>
+          <p>Quand vous réalisez un bénéfice et vendez une position (ou un palier), cliquez sur "Encaisser" pour enregistrer votre gain acquis ici.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- IDEAS & WATCHLIST REVOLUT TAB CONTENT -->
+    <section class="tab-content" id="ideasTabSection" style="display: none;">
+      <div class="ideas-header-banner">
+        <h3>💡 Idées d'investissements populaires sur Revolut</h3>
+        <p>Sélection de valeurs surveillées avec signaux techniques automatiques (supports, rebonds et sommets).</p>
+      </div>
+
+      <div class="ideas-grid" id="ideasGrid">
+        <!-- Injected dynamically with live market data -->
+      </div>
+    </section>
+
+  </div>
+
+  <!-- MODAL: CASH OUT POSITION -->
+  <div class="modal-backdrop" id="cashOutModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="cashOutModalTitle">Encaisser / Vendre une position</h2>
+        <button class="modal-close" id="cashOutModalCloseBtn">&times;</button>
+      </div>
+      <form id="cashOutForm">
+        <input type="hidden" id="cashOutPosId" value="">
+        
+        <div class="form-group" style="background:var(--card-sub-bg); padding:12px; border-radius:8px; border:1px solid var(--card-border); margin-bottom:14px;">
+          <strong id="cashOutPosSummaryTitle" style="font-size:15px; display:block; margin-bottom:4px;">SPCX (SpaceX)</strong>
+          <span id="cashOutPosSummaryDetails" style="font-size:12px; color:var(--text-muted);">0.36386588 part achetée à 134,17 $US</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cashOutType">Type de vente</label>
+            <select id="cashOutType" class="clean-select" style="width:100%; height:40px;">
+              <option value="ALL">Vendre 100% (Tout encaisser)</option>
+              <option value="HALF">Vendre Palier 1 (50% des parts)</option>
+              <option value="CUSTOM">Montant / parts personnalisé</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cashOutDate">Date de la vente</label>
+            <input type="date" id="cashOutDate" style="height:40px;">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cashOutSellPrice">Prix de vente unitaire</label>
+            <input type="number" id="cashOutSellPrice" step="any" min="0" placeholder="Ex: 145.20">
+          </div>
+          <div class="form-group">
+            <label for="cashOutShares">Parts vendues</label>
+            <input type="number" id="cashOutShares" step="any" min="0" placeholder="Ex: 0.36386588">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cashOutFee">Frais de vente Revolut payés</label>
+            <input type="number" id="cashOutFee" step="any" min="0" placeholder="Ex: 1.17">
+            <small class="form-hint">Commission prélevée par Revolut.</small>
+          </div>
+          <div class="form-group">
+            <label>Gain net calculé à encaisser</label>
+            <div id="cashOutCalculatedProfit" style="font-size:16px; font-weight:800; padding:10px; background:var(--card-sub-bg); border-radius:6px; color:var(--color-up); text-align:center;">+0,00 $US</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cashOutCancelBtn">Annuler</button>
+          <button type="submit" class="btn btn-primary" style="background:var(--color-up); border-color:var(--color-up);">Valider l'encaissement</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- MODAL: ADD / EDIT POSITION -->
@@ -429,6 +558,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=1.9"></script>
+  <script src="./js/app.js?v=2.0"></script>
 </body>
 </html>

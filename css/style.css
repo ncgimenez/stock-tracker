@@ -322,6 +322,263 @@ body {
   background: var(--color-down-bg);
 }
 
+/* --- MAIN NAVIGATION TABS --- */
+.main-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--card-border);
+  padding-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.main-nav-tabs::-webkit-scrollbar {
+  display: none;
+}
+.nav-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--card-sub-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.nav-tab-btn:hover {
+  color: var(--text-main);
+  border-color: var(--card-border-hover);
+}
+.nav-tab-btn.active {
+  background: var(--text-main);
+  color: var(--bg);
+  border-color: var(--text-main);
+}
+.nav-tab-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+}
+.nav-tab-btn.active .nav-tab-badge {
+  background: rgba(0, 0, 0, 0.2);
+}
+.nav-tab-badge.badge-green {
+  background: var(--color-up-bg);
+  color: var(--color-up);
+}
+
+/* --- FILTER PILLS & CONTROLS --- */
+.filter-pills-group {
+  display: inline-flex;
+  gap: 6px;
+}
+.filter-pill-btn {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--card-sub-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.filter-pill-btn:hover {
+  color: var(--text-main);
+}
+.filter-pill-btn.active {
+  background: var(--card-bg);
+  color: var(--text-main);
+  border-color: var(--text-muted);
+}
+.filter-pill-btn.filter-green.active {
+  background: var(--color-up-bg);
+  color: var(--color-up);
+  border-color: var(--color-up-border);
+}
+.filter-pill-btn.filter-red.active {
+  background: var(--color-down-bg);
+  color: var(--color-down);
+  border-color: var(--color-down-border);
+}
+
+.view-toggle-btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- COMPACT MODE FOR POSITIONS --- */
+.pos-card.is-compact .trade-journey,
+.pos-card.is-compact .day-strip-wrapper {
+  display: none !important;
+}
+.pos-card.is-compact {
+  padding: 16px 20px;
+}
+.pos-card.is-compact .pos-metrics-grid {
+  margin: 12px 0 8px 0;
+}
+.pos-card.is-compact .suggestion-banner {
+  margin-bottom: 8px;
+}
+
+/* --- CASH OUT TAB STYLES --- */
+.cashout-summary-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.cashout-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.cashout-total-number {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-up);
+  margin: 4px 0;
+}
+.cashout-subtext {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.cashout-stats {
+  display: flex;
+  gap: 16px;
+}
+.cashout-stat-box {
+  background: var(--card-sub-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  text-align: center;
+}
+.stat-box-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.stat-box-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+.cashout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cashout-item-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.cashout-item-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cashout-item-profit {
+  text-align: right;
+}
+
+/* --- IDEAS REVOLUT TAB STYLES --- */
+.ideas-header-banner {
+  background: var(--card-sub-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.ideas-header-banner h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.ideas-header-banner p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.ideas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.idea-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+.idea-card:hover {
+  border-color: var(--card-border-hover);
+  transform: translateY(-2px);
+}
+.idea-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.idea-symbol {
+  font-size: 14px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--card-sub-bg);
+  border: 1px solid var(--card-border);
+}
+.idea-name {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.idea-price {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+.idea-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
 /* --- CONTROLS BAR --- */
 .controls-bar {
   display: flex;

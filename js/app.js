@@ -23,6 +23,7 @@ const DEFAULT_STORAGE = {
     dipBuyThresholdPercent: -3,
     defaultPeriodDays: 7
   },
+  cashOuts: [],
   positions: [
     {
       id: 'pos_apple',
@@ -65,6 +66,12 @@ const clientCache = {
   quotes: new Map(),
   rates: new Map()
 };
+
+// State
+let currentTab = 'active'; // 'active' | 'cashout' | 'ideas'
+let currentFilter = 'all'; // 'all' | 'gain' | 'loss'
+let viewMode = localStorage.getItem('st_view_mode') || 'compact'; // default to concise view
+let expandedPositionIds = new Set();
 
 // DOM Elements
 const positionsContainer = document.getElementById('positionsContainer');
@@ -202,6 +209,22 @@ const I18N = {
     grossShort: "Brut : ",
     feesShort: "Frais : ",
     currentValueEurText: "Valeur : ",
+    tabActive: "📊 Portefeuille Actif",
+    tabCashOut: "💰 Gains Encaissés (Cash Out)",
+    tabIdeas: "💡 Idées Revolut",
+    filterAll: "Tous",
+    filterGain: "🟢 En gain",
+    filterLoss: "🔴 En perte",
+    viewModeCompact: "Vue Compacte",
+    viewModeDetailed: "Vue Détaillée",
+    toggleCardDetails: "Détails & Calendrier",
+    hideCardDetails: "Masquer détails",
+    sugSellAll: "🎯 TOUT VENDRE (100% des parts)",
+    sugSellTier: "⚖️ VENDRE PALIER 1 (50% des parts)",
+    sugCutAll: "🛑 TOUT COUPER (Sortie d'urgence)",
+    sugHoldTarget: "🟢 CONSERVER (Attendre palier +{target}%)",
+    btnCashOut: "Encaisser",
+    cashOutModalTitle: "Encaisser / Vendre {name}",
     // Settings
     settingsTitle: "Critères de Recommandation",
     settingsProfitTarget: "Objectif de prise de bénéfices (Gain global)",
@@ -327,6 +350,22 @@ const I18N = {
     grossShort: "Gross: ",
     feesShort: "Fees: ",
     currentValueEurText: "Value: ",
+    tabActive: "📊 Active Portfolio",
+    tabCashOut: "💰 Cashed Out Profits",
+    tabIdeas: "💡 Revolut Ideas",
+    filterAll: "All",
+    filterGain: "🟢 In Profit",
+    filterLoss: "🔴 In Loss",
+    viewModeCompact: "Compact View",
+    viewModeDetailed: "Detailed View",
+    toggleCardDetails: "Details & Calendar",
+    hideCardDetails: "Hide details",
+    sugSellAll: "🎯 SELL ALL (100% shares)",
+    sugSellTier: "⚖️ SELL TIER 1 (50% shares)",
+    sugCutAll: "🛑 CUT ALL (Emergency Exit)",
+    sugHoldTarget: "🟢 HOLD (Wait for +{target}% target)",
+    btnCashOut: "Cash Out",
+    cashOutModalTitle: "Cash out / Sell {name}",
     // Settings
     settingsTitle: "Recommendation Rules",
     settingsProfitTarget: "Profit taking target (Total gain)",
@@ -500,10 +539,29 @@ function setLanguage(lang) {
   const setImpCsv = document.getElementById("settingsImportCsvBtn");
   if (setImpCsv) setImpCsv.textContent = t("btnSettingsImportCsv");
 
+  const navActive = document.querySelector('#mainNavTabs .nav-tab-btn[data-tab="active"] > span:first-child');
+  if (navActive) navActive.textContent = t("tabActive");
+  const navCashOut = document.querySelector('#mainNavTabs .nav-tab-btn[data-tab="cashout"] > span:first-child');
+  if (navCashOut) navCashOut.textContent = t("tabCashOut");
+  const navIdeas = document.querySelector('#mainNavTabs .nav-tab-btn[data-tab="ideas"] > span:first-child');
+  if (navIdeas) navIdeas.textContent = t("tabIdeas");
+
+  const filterAllBtn = document.querySelector('#filterPillsGroup .filter-pill-btn[data-filter="all"]');
+  if (filterAllBtn) filterAllBtn.innerHTML = `${t("filterAll")} (<span id="filterAllCount">0</span>)`;
+  const filterGainBtn = document.querySelector('#filterPillsGroup .filter-pill-btn[data-filter="gain"]');
+  if (filterGainBtn) filterGainBtn.innerHTML = `${t("filterGain")} (<span id="filterGainCount">0</span>)`;
+  const filterLossBtn = document.querySelector('#filterPillsGroup .filter-pill-btn[data-filter="loss"]');
+  if (filterLossBtn) filterLossBtn.innerHTML = `${t("filterLoss")} (<span id="filterLossCount">0</span>)`;
+
+  const viewModeTextEl = document.getElementById("viewModeText");
+  if (viewModeTextEl) viewModeTextEl.textContent = viewMode === "compact" ? t("viewModeDetailed") : t("viewModeCompact");
+
   updateCurrencyLabels();
   if (portfolio) {
     renderSummary();
     renderPositions();
+    if (currentTab === 'cashout') renderCashOutTab();
+    if (currentTab === 'ideas') renderIdeasTab();
   }
 }
 
@@ -626,10 +684,12 @@ if (document.readyState === 'loading') {
 
 async function initApp() {
   updateSecurityUI();
+  updateNavTabBadges();
   // Render immediately from local storage so user NEVER waits
   loadPortfolio();
   // Then sync with cloud in the background
   pullFromCloud().then(() => {
+    updateNavTabBadges();
     loadPortfolio();
   }).catch(e => console.warn('Sync cloud non critique:', e));
 }
@@ -757,6 +817,57 @@ function setupEventListeners() {
   });
   downDaysRange.addEventListener('input', (e) => {
     document.getElementById('downDaysVal').textContent = `${e.target.value} jours`;
+  });
+
+  // Main Nav Tabs
+  const mainNavTabs = document.getElementById('mainNavTabs');
+  if (mainNavTabs) {
+    mainNavTabs.addEventListener('click', (e) => {
+      const btn = e.target.closest('.nav-tab-btn');
+      if (!btn) return;
+      const tab = btn.dataset.tab;
+      if (tab) switchMainTab(tab);
+    });
+  }
+
+  // Filter Pills (All / Gain / Loss)
+  const filterPills = document.getElementById('filterPillsGroup');
+  if (filterPills) {
+    filterPills.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-pill-btn');
+      if (!btn) return;
+      document.querySelectorAll('#filterPillsGroup .filter-pill-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter || 'all';
+      renderPositions();
+    });
+  }
+
+  // View Mode Toggle (Compact vs Detailed)
+  const viewToggleBtn = document.getElementById('viewModeToggleBtn');
+  if (viewToggleBtn) {
+    viewToggleBtn.addEventListener('click', () => {
+      viewMode = viewMode === 'compact' ? 'detailed' : 'compact';
+      localStorage.setItem('st_view_mode', viewMode);
+      renderPositions();
+    });
+  }
+
+  // Cash Out Modal & Form
+  const cashOutModalCloseBtn = document.getElementById('cashOutModalCloseBtn');
+  if (cashOutModalCloseBtn) cashOutModalCloseBtn.addEventListener('click', closeCashOutModal);
+  const cashOutCancelBtn = document.getElementById('cashOutCancelBtn');
+  if (cashOutCancelBtn) cashOutCancelBtn.addEventListener('click', closeCashOutModal);
+
+  const cashOutForm = document.getElementById('cashOutForm');
+  if (cashOutForm) cashOutForm.addEventListener('submit', handleCashOutSubmit);
+
+  const cashOutType = document.getElementById('cashOutType');
+  if (cashOutType) cashOutType.addEventListener('change', updateCashOutCalculation);
+
+  ['cashOutSellPrice', 'cashOutShares', 'cashOutFee'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateCashOutCalculation);
   });
 
   // Autocomplete and auto-sync symbol/name
@@ -1057,6 +1168,9 @@ async function pullFromCloud() {
       if (Array.isArray(cloudData.positions)) {
         local.positions = cloudData.positions;
       }
+      if (Array.isArray(cloudData.cashOuts)) {
+        local.cashOuts = cloudData.cashOuts;
+      }
       if (cloudData.settings) {
         local.settings = cloudData.settings;
       }
@@ -1080,6 +1194,7 @@ async function pushToCloud() {
     const local = getLocalData();
     const payload = {
       positions: local.positions || [],
+      cashOuts: local.cashOuts || [],
       settings: local.settings || DEFAULT_STORAGE.settings,
       pin_hash: localStorage.getItem('st_pin_hash') || null,
       recovery_hash: await sha256(CURRENT_RECOVERY_KEY),
@@ -1230,7 +1345,7 @@ async function getClientRateToEUR(fromCurrency) {
   return fallbacks[cur] || 1.0;
 }
 
-// Decision Suggestions (incorporates Profit/Loss rules & Market Structure Highs/Lows)
+// Decision Suggestions (incorporates Profit/Loss rules, Market Structure, & Fee-Aware Tier vs All Selling)
 function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecutiveUp, consecutiveDown, settings, structure = {}) {
   const targetProfit = settings.profitTargetPercent ?? 15;
   const stopLoss = settings.stopLossPercent ?? -10;
@@ -1242,64 +1357,61 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
     distanceFromHighPct = 0,
     recentSwingLow = 0,
     highestClose = 0,
-    currency = "EUR"
+    currency = "EUR",
+    currentValueNative = 0,
+    investedNative = 0,
+    shares = 1,
+    buyPrice = 0,
+    sellFee = 0
   } = structure;
+
+  const isSmallTrade = currentValueNative < 150 || (sellFee * 2) > (currentValueNative * 0.025);
+  const targetPrice = buyPrice > 0 ? buyPrice * (1 + targetProfit / 100) : 0;
 
   // 1. Hard Stop-Loss reached
   if (totalGainPercent <= stopLoss) {
     return {
       action: "SELL_STOP_LOSS",
-      label: t("sugStopLoss"),
+      label: t("sugCutAll"),
       badgeClass: "badge-danger",
       reason: currentLang === "en"
-        ? `Total loss of ${totalGainPercent.toFixed(1)}% (stop-loss threshold: ${stopLoss}%). Consider cutting position to protect capital.`
-        : `Perte globale de ${totalGainPercent.toFixed(1)}% (seuil stop-loss: ${stopLoss}%). Envisagez de couper la position pour limiter les pertes.`
+        ? `Total loss of ${totalGainPercent.toFixed(1)}% (stop-loss threshold: ${stopLoss}%). Cut 100% of position to protect capital.`
+        : `Perte globale de ${totalGainPercent.toFixed(1)}% (seuil stop-loss: ${stopLoss}%). Coupez 100% de la position pour protéger votre capital.`
     };
   }
 
   // 2. Break of Structure (Price broke below key support swing low - Objective Exit)
   if (isBreakOfStructure && recentSwingLow > 0) {
     const formattedLow = formatCurrency(recentSwingLow, currency);
-    if (totalGainPercent > 0) {
-      return {
-        action: "SELL_BREAKDOWN",
-        label: t("sugBreakStructure"),
-        badgeClass: "badge-danger",
-        reason: currentLang === "en"
-          ? `Break of Structure: Price broke below key support (${formattedLow}). Uptrend is broken: objective signal to secure profits without emotion.`
-          : `Rupture de structure : le cours a cassé son creux de support (${formattedLow}). La dynamique haussière est brisée : signal objectif pour sécuriser vos gains sans émotion.`
-      };
-    } else {
-      return {
-        action: "SELL_STOP_LOSS",
-        label: t("sugBreakStructure"),
-        badgeClass: "badge-danger",
-        reason: currentLang === "en"
-          ? `Support breakdown below ${formattedLow}. Downtrend confirmed: consider exiting without emotion.`
-          : `Cassure du creux de support sous ${formattedLow}. Tendance baissière confirmée : signal objectif pour couper.`
-      };
-    }
+    return {
+      action: "SELL_BREAKDOWN",
+      label: t("sugCutAll"),
+      badgeClass: "badge-danger",
+      reason: currentLang === "en"
+        ? `Break of Structure: Price broke below key support (${formattedLow}). Uptrend is broken: cut 100% without emotion.`
+        : `Rupture de structure : le cours a cassé son creux de support (${formattedLow}). La dynamique haussière est brisée : coupez 100% de la position sans émotion.`
+    };
   }
 
-  // 3. Profit target reached
+  // 3. Profit target reached -> Explicitly decide between VENDRE TOUT vs VENDRE PALIER 1 based on fees!
   if (totalGainPercent >= targetProfit) {
-    if (consecutiveDown >= 1 || todayChangePercent < -1.0 || distanceFromHighPct < -4.0) {
+    if (isSmallTrade) {
       return {
-        action: "TAKE_PROFIT",
-        label: t("sugTakeProfit"),
+        action: "TAKE_PROFIT_ALL",
+        label: t("sugSellAll"),
         badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Profit target met (+${totalGainPercent.toFixed(1)}%) with pullback (${distanceFromHighPct.toFixed(1)}% from peak). Optimal timing to secure profits.`
-          : `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}%) et repli (${distanceFromHighPct.toFixed(1)}% sous le sommet). Excellent timing pour encaisser.`
+          ? `Profit target met (+${totalGainPercent.toFixed(1)}%). Small trade size: sell 100% of shares in one order to avoid paying Revolut fees twice.`
+          : `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}%). Montant de petite taille : vendez 100% de vos parts en un seul ordre pour éviter de payer deux fois les frais Revolut de ${formatCurrency(sellFee, currency)}.`
       };
     } else {
       return {
-        action: "TARGET_REACHED",
-        label: t("sugTargetReached"),
-        badgeClass: "badge-gold",
+        action: "TAKE_PROFIT_TIER",
+        label: t("sugSellTier"),
+        badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Target reached (+${totalGainPercent.toFixed(1)}%). Trading near highs. Prepare to secure if support breaks.`
-          : `Objectif dépassé (+${totalGainPercent.toFixed(1)}%). Très forte dynamique. Prêt à sécuriser si le dernier creux lâche.`
+          ? `Profit target met (+${totalGainPercent.toFixed(1)}%). Sell 50% tier (${(shares * 0.5).toFixed(4)} shares) to bank profits. Keep remainder risk-free.`
+          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%). Vendez le palier 1 (50% des parts, soit ${(shares * 0.5).toFixed(4)} parts) pour encaisser ${formatCurrency(currentValueNative * 0.5, currency)}. Gardez le reste sans risque avec un stop au prix d'achat.`
       };
     }
   }
@@ -1353,11 +1465,11 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
 
   return {
     action: "HOLD",
-    label: t("sugHold"),
+    label: t("sugHoldTarget", { target: targetProfit }),
     badgeClass: "badge-neutral",
     reason: currentLang === "en"
-      ? `Neutral or stable trend above key support. No risk alerts triggered, hold position.`
-      : `Tendance neutre ou stable au-dessus du support. Aucune alerte déclenchée, conservez sereinement.`
+      ? `Neutral trend above key support. Target profit (+${targetProfit}% @ ${formatCurrency(targetPrice, currency)}). Hold position.`
+      : `Structure saine au-dessus du support. Objectif de vente palier fixé à +${targetProfit}% (${formatCurrency(targetPrice, currency)}). Conservez sereinement.`
   };
 }
 
@@ -1533,7 +1645,12 @@ async function buildPortfolioData() {
           distanceFromHighPct,
           recentSwingLow,
           highestClose,
-          currency: posCurrency
+          currency: posCurrency,
+          currentValueNative,
+          investedNative,
+          shares,
+          buyPrice,
+          sellFee
         }
       );
 
@@ -1804,7 +1921,37 @@ function renderSummary() {
 function renderPositions() {
   if (!portfolio || !portfolio.positions) return;
 
-  if (portfolio.positions.length === 0) {
+  const allPositions = portfolio.positions || [];
+  const gainCount = allPositions.filter(p => (p.netGainNative !== undefined ? p.netGainNative : p.totalGainNative) >= 0).length;
+  const lossCount = allPositions.filter(p => (p.netGainNative !== undefined ? p.netGainNative : p.totalGainNative) < 0).length;
+
+  const fAllEl = document.getElementById('filterAllCount');
+  if (fAllEl) fAllEl.textContent = allPositions.length;
+  const fGainEl = document.getElementById('filterGainCount');
+  if (fGainEl) fGainEl.textContent = gainCount;
+  const fLossEl = document.getElementById('filterLossCount');
+  if (fLossEl) fLossEl.textContent = lossCount;
+
+  const activeTabBadge = document.getElementById('activeCountBadge');
+  if (activeTabBadge) activeTabBadge.textContent = allPositions.length;
+
+  const localCashOuts = getLocalData().cashOuts || [];
+  const cashOutBadge = document.getElementById('cashOutCountBadge');
+  if (cashOutBadge) cashOutBadge.textContent = localCashOuts.length;
+
+  const viewModeTextEl = document.getElementById('viewModeText');
+  const viewModeIconEl = document.getElementById('viewModeIcon');
+  if (viewModeTextEl) viewModeTextEl.textContent = viewMode === 'compact' ? t("viewModeDetailed") : t("viewModeCompact");
+  if (viewModeIconEl) viewModeIconEl.textContent = viewMode === 'compact' ? '🔍' : '👁️';
+
+  const filteredPositions = allPositions.filter(p => {
+    const netG = p.netGainNative !== undefined ? p.netGainNative : p.totalGainNative;
+    if (currentFilter === 'gain') return netG >= 0;
+    if (currentFilter === 'loss') return netG < 0;
+    return true;
+  });
+
+  if (allPositions.length === 0) {
     positionsContainer.innerHTML = `
       <div class="empty-state">
         <h3 style="margin-bottom: 8px; color: var(--text-main);">${t("emptyTitle")}</h3>
@@ -1815,7 +1962,17 @@ function renderPositions() {
     return;
   }
 
-  const sorted = [...portfolio.positions].sort((a, b) => {
+  if (filteredPositions.length === 0) {
+    positionsContainer.innerHTML = `
+      <div class="empty-state">
+        <h3 style="margin-bottom: 8px; color: var(--text-main);">Aucune position dans cette catégorie</h3>
+        <p>Toutes vos positions actuelles sont ${currentFilter === 'gain' ? 'en perte' : 'en gain'}.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const sorted = [...filteredPositions].sort((a, b) => {
     if (currentSort === "gain_desc") return b.totalGainPercent - a.totalGainPercent;
     if (currentSort === "gain_asc") return a.totalGainPercent - b.totalGainPercent;
     if (currentSort === "today_desc") return b.todayChangePercent - a.todayChangePercent;
@@ -1932,8 +2089,10 @@ function renderPositions() {
       </div>
     `;
 
+    const isCardCompact = viewMode === 'compact' && !expandedPositionIds.has(pos.id);
+
     return `
-      <article class="pos-card" data-id="${pos.id}">
+      <article class="pos-card ${isCardCompact ? 'is-compact' : ''}" data-id="${pos.id}">
         <div class="pos-top-row">
           <div class="pos-identity">
             <span class="pos-symbol-pill">${escapeHtml(pos.symbol)}</span>
@@ -1982,9 +2141,6 @@ function renderPositions() {
             <span class="suggestion-reason">${escapeHtml(sug.reason || "")}</span>
           </div>
         </div>
-            <span class="suggestion-reason">${escapeHtml(sug.reason || "")}</span>
-          </div>
-        </div>
 
         <div class="day-strip-wrapper">
           <div class="strip-header">
@@ -1999,6 +2155,8 @@ function renderPositions() {
         <div class="pos-footer">
           <span>${pos.notes ? `📝 <em>${escapeHtml(pos.notes)}</em>` : (currentLang === "en" ? "No notes" : "Aucune note")}</span>
           <div class="pos-actions">
+            <button class="btn btn-secondary" onclick="togglePositionDetails('${pos.id}')" style="font-size: 11px; padding: 4px 10px;">${isCardCompact ? '👁️ ' + t("toggleCardDetails") : '▲ ' + t("hideCardDetails")}</button>
+            <button class="btn btn-primary" onclick="openCashOutModal('${pos.id}')" style="font-size: 11px; padding: 4px 10px; background:var(--color-up); border-color:var(--color-up); color:#fff;">💰 ${t("btnCashOut")}</button>
             <button class="btn btn-secondary" onclick="editPosition('${pos.id}')" style="font-size: 11px; padding: 4px 10px;">${t("editBtn")}</button>
             <button class="btn-ghost-danger" onclick="deletePosition('${pos.id}', '${pos.symbol}')">${t("deleteBtn")}</button>
           </div>
@@ -2008,6 +2166,15 @@ function renderPositions() {
   }).join("");
 }
 
+function togglePositionDetails(id) {
+  if (expandedPositionIds.has(id)) {
+    expandedPositionIds.delete(id);
+  } else {
+    expandedPositionIds.add(id);
+  }
+  renderPositions();
+}
+
 function getBannerClass(action) {
   switch (action) {
     case 'HOLD':
@@ -2015,6 +2182,8 @@ function getBannerClass(action) {
     case 'HOLD_AT_HIGH':
       return 'banner-success';
     case 'TAKE_PROFIT':
+    case 'TAKE_PROFIT_ALL':
+    case 'TAKE_PROFIT_TIER':
       return 'banner-warning';
     case 'TARGET_REACHED':
       return 'banner-gold';
@@ -2266,7 +2435,12 @@ function resetSettings() {
 
 // Export / Import
 function exportData() {
-  const data = { positions: portfolio?.positions || [] };
+  const local = getLocalData();
+  const data = {
+    positions: local.positions || [],
+    cashOuts: local.cashOuts || [],
+    settings: local.settings || DEFAULT_STORAGE.settings
+  };
   const jsonStr = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -2285,10 +2459,11 @@ function importData() {
     if (parsed && (parsed.positions || Array.isArray(parsed))) {
       const formatted = {
         settings: parsed.settings || DEFAULT_STORAGE.settings,
+        cashOuts: parsed.cashOuts || [],
         positions: Array.isArray(parsed) ? parsed : (parsed.positions || [])
       };
       saveLocalData(formatted);
-      alert('Positions importées avec succès !');
+      alert('Positions et encaissements importés avec succès !');
       closeSettingsModal();
       loadPortfolio(true);
       pushToCloud();
@@ -2530,3 +2705,483 @@ function escapeJs(str) {
   if (!str) return '';
   return String(str).replace(/'/g, "\\'");
 }
+
+// --- MAIN NAVIGATION TABS & CASHOUT LOGIC ---
+let currentCashOutPos = null;
+
+function switchMainTab(tabName) {
+  currentTab = tabName;
+  document.querySelectorAll('#mainNavTabs .nav-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  const activeSection = document.getElementById('positionsContainer');
+  const summaryGrid = document.getElementById('summaryGrid');
+  const activeControlsBar = document.getElementById('activeControlsBar');
+  const cashOutTab = document.getElementById('cashOutTabSection');
+  const ideasTab = document.getElementById('ideasTabSection');
+
+  if (tabName === 'active') {
+    if (summaryGrid) summaryGrid.style.display = 'grid';
+    if (activeControlsBar) activeControlsBar.style.display = 'flex';
+    if (activeSection) activeSection.style.display = 'block';
+    if (cashOutTab) cashOutTab.style.display = 'none';
+    if (ideasTab) ideasTab.style.display = 'none';
+    renderPositions();
+  } else if (tabName === 'cashout') {
+    if (summaryGrid) summaryGrid.style.display = 'none';
+    if (activeControlsBar) activeControlsBar.style.display = 'none';
+    if (activeSection) activeSection.style.display = 'none';
+    if (cashOutTab) cashOutTab.style.display = 'block';
+    if (ideasTab) ideasTab.style.display = 'none';
+    renderCashOutTab();
+  } else if (tabName === 'ideas') {
+    if (summaryGrid) summaryGrid.style.display = 'none';
+    if (activeControlsBar) activeControlsBar.style.display = 'none';
+    if (activeSection) activeSection.style.display = 'none';
+    if (cashOutTab) cashOutTab.style.display = 'none';
+    if (ideasTab) ideasTab.style.display = 'block';
+    renderIdeasTab();
+  }
+}
+
+function updateNavTabBadges() {
+  const local = getLocalData();
+  const activeCount = (local.positions || []).length;
+  const cashOutCount = (local.cashOuts || []).length;
+
+  const activeBadge = document.getElementById('activeCountBadge');
+  if (activeBadge) activeBadge.textContent = activeCount;
+
+  const cashOutBadge = document.getElementById('cashOutCountBadge');
+  if (cashOutBadge) cashOutBadge.textContent = cashOutCount;
+}
+
+function openCashOutModal(posId) {
+  const local = getLocalData();
+  const pos = (local.positions || []).find(p => p.id === posId);
+  if (!pos) return;
+
+  currentCashOutPos = pos;
+  const modal = document.getElementById('cashOutModal');
+  const posIdInput = document.getElementById('cashOutPosId');
+  const titleEl = document.getElementById('cashOutModalTitle');
+  const summaryTitle = document.getElementById('cashOutPosSummaryTitle');
+  const summaryDetails = document.getElementById('cashOutPosSummaryDetails');
+  const dateInput = document.getElementById('cashOutDate');
+  const priceInput = document.getElementById('cashOutSellPrice');
+  const feeInput = document.getElementById('cashOutFee');
+  const typeSelect = document.getElementById('cashOutType');
+  const sharesInput = document.getElementById('cashOutShares');
+
+  if (posIdInput) posIdInput.value = pos.id;
+  if (titleEl) titleEl.textContent = `${t('cashOutModalTitle', { name: pos.symbol })}`;
+  if (summaryTitle) summaryTitle.textContent = `${pos.name || pos.symbol} (${pos.symbol})`;
+
+  const cur = pos.currency || 'USD';
+  if (summaryDetails) {
+    const investedCur = pos.investedAmount || (pos.shares * pos.buyPrice);
+    summaryDetails.textContent = `${pos.shares} ${currentLang === 'en' ? 'shares bought at' : 'parts achetées à'} ${formatCurrency(pos.buyPrice, cur)} (${currentLang === 'en' ? 'Invested' : 'Investi'} : ${formatCurrency(investedCur, cur)})`;
+  }
+
+  // Find live quote from active portfolio
+  const livePrice = portfolio?.positions?.find(p => p.id === posId)?.currentPrice || pos.currentPrice || pos.buyPrice;
+  if (priceInput) priceInput.value = Number(livePrice).toFixed(2);
+
+  // Default date to today
+  if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+
+  // Default fee to standard Revolut fee ($1.17 / €1.00) or previous buyFee
+  if (feeInput) feeInput.value = (pos.sellFee || pos.buyFee || (cur === 'EUR' ? 1.00 : 1.17)).toFixed(2);
+
+  if (typeSelect) typeSelect.value = 'ALL';
+  if (sharesInput) {
+    sharesInput.value = pos.shares;
+    sharesInput.disabled = true;
+  }
+
+  updateCashOutCalculation();
+  if (modal) modal.classList.add('active');
+}
+
+function closeCashOutModal() {
+  const modal = document.getElementById('cashOutModal');
+  if (modal) modal.classList.remove('active');
+  currentCashOutPos = null;
+}
+
+function updateCashOutCalculation() {
+  if (!currentCashOutPos) return;
+
+  const type = document.getElementById('cashOutType')?.value || 'ALL';
+  const sharesInput = document.getElementById('cashOutShares');
+  const priceInput = document.getElementById('cashOutSellPrice');
+  const feeInput = document.getElementById('cashOutFee');
+  const profitEl = document.getElementById('cashOutCalculatedProfit');
+
+  if (type === 'ALL') {
+    if (sharesInput) {
+      sharesInput.value = currentCashOutPos.shares;
+      sharesInput.disabled = true;
+    }
+  } else if (type === 'HALF') {
+    if (sharesInput) {
+      sharesInput.value = Math.round((currentCashOutPos.shares / 2) * 1000000) / 1000000;
+      sharesInput.disabled = true;
+    }
+  } else {
+    if (sharesInput) sharesInput.disabled = false;
+  }
+
+  const shares = parseFloat(sharesInput?.value) || 0;
+  const sellPrice = parseFloat(priceInput?.value) || 0;
+  const sellFee = parseFloat(feeInput?.value) || 0;
+  const buyPrice = parseFloat(currentCashOutPos.buyPrice) || 0;
+  const cur = currentCashOutPos.currency || 'USD';
+
+  // Allocated buy fee proportional to shares sold
+  const totalShares = currentCashOutPos.shares || shares || 1;
+  const allocBuyFee = (currentCashOutPos.buyFee || 0) * (shares / totalShares);
+
+  const grossProfit = (sellPrice - buyPrice) * shares;
+  const netProfit = grossProfit - allocBuyFee - sellFee;
+  const investedSold = (buyPrice * shares) + allocBuyFee;
+  const returnPct = investedSold > 0 ? (netProfit / investedSold) * 100 : 0;
+
+  if (profitEl) {
+    const sign = netProfit >= 0 ? '+' : '';
+    profitEl.textContent = `${sign}${formatCurrency(netProfit, cur)} (${sign}${returnPct.toFixed(2)}%)`;
+    profitEl.style.color = netProfit >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+  }
+}
+
+async function handleCashOutSubmit(e) {
+  e.preventDefault();
+  if (!currentCashOutPos) return;
+
+  const sharesInput = document.getElementById('cashOutShares');
+  const priceInput = document.getElementById('cashOutSellPrice');
+  const feeInput = document.getElementById('cashOutFee');
+  const dateInput = document.getElementById('cashOutDate');
+
+  const sharesSold = parseFloat(sharesInput?.value) || 0;
+  const sellPrice = parseFloat(priceInput?.value) || 0;
+  const sellFee = parseFloat(feeInput?.value) || 0;
+  const soldDate = dateInput?.value || new Date().toISOString().split('T')[0];
+
+  if (sharesSold <= 0) {
+    alert(currentLang === 'en' ? 'Please enter a valid number of shares to sell.' : 'Veuillez saisir un nombre valide de parts vendues.');
+    return;
+  }
+
+  if (sellPrice <= 0) {
+    alert(currentLang === 'en' ? 'Please enter a valid selling price.' : 'Veuillez saisir un prix de vente valide.');
+    return;
+  }
+
+  const cur = currentCashOutPos.currency || 'USD';
+  const buyPrice = currentCashOutPos.buyPrice || 0;
+  const totalShares = currentCashOutPos.shares || sharesSold;
+  const allocBuyFee = (currentCashOutPos.buyFee || 0) * (sharesSold / totalShares);
+  const grossProfit = (sellPrice - buyPrice) * sharesSold;
+  const netProfit = grossProfit - allocBuyFee - sellFee;
+
+  let fxRateToEur = 1.0;
+  if (cur === 'USD') fxRateToEur = 0.92;
+  else if (cur === 'GBP') fxRateToEur = 1.18;
+  const netProfitEur = netProfit * fxRateToEur;
+
+  const cashOutRecord = {
+    id: 'co_' + Date.now(),
+    posId: currentCashOutPos.id,
+    symbol: currentCashOutPos.symbol,
+    name: currentCashOutPos.name,
+    currency: cur,
+    sharesSold: sharesSold,
+    buyPrice: buyPrice,
+    sellPrice: sellPrice,
+    buyFee: Math.round(allocBuyFee * 100) / 100,
+    sellFee: Math.round(sellFee * 100) / 100,
+    soldDate: soldDate,
+    grossProfit: Math.round(grossProfit * 100) / 100,
+    netProfit: Math.round(netProfit * 100) / 100,
+    netProfitEur: Math.round(netProfitEur * 100) / 100,
+    created_at: new Date().toISOString()
+  };
+
+  const local = getLocalData();
+  local.cashOuts = local.cashOuts || [];
+  local.cashOuts.unshift(cashOutRecord);
+
+  // Update or remove from active positions
+  const posIdx = (local.positions || []).findIndex(p => p.id === currentCashOutPos.id);
+  if (posIdx >= 0) {
+    const existing = local.positions[posIdx];
+    const remainingShares = Math.round((existing.shares - sharesSold) * 1000000) / 1000000;
+    if (remainingShares <= 0.000001) {
+      local.positions.splice(posIdx, 1);
+    } else {
+      existing.shares = remainingShares;
+      existing.investedAmount = Math.round((remainingShares * existing.buyPrice) * 100) / 100;
+      existing.buyFee = Math.max(0, Math.round(((existing.buyFee || 0) - allocBuyFee) * 100) / 100);
+    }
+  }
+
+  saveLocalData(local);
+  closeCashOutModal();
+  updateNavTabBadges();
+  await loadPortfolio(true);
+  pushToCloud();
+
+  alert(
+    currentLang === 'en' 
+      ? `🎉 Cash Out recorded!\nNet profit: ${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit, cur)} (${netProfit >= 0 ? '+' : ''}${netProfitEur.toFixed(2)} €).\nMoved to "Realized Profits" tab.`
+      : `🎉 Encaissement enregistré avec succès !\nGain net : ${netProfit >= 0 ? '+' : ''}${formatCurrency(netProfit, cur)} (${netProfit >= 0 ? '+' : ''}${netProfitEur.toFixed(2)} €).\nVos gains sont désormais archivés dans l'onglet "Gains Encaissés".`
+  );
+
+  if (currentTab === 'cashout') {
+    renderCashOutTab();
+  }
+}
+
+function renderCashOutTab() {
+  const local = getLocalData();
+  const cashOuts = local.cashOuts || [];
+
+  updateNavTabBadges();
+
+  const totalEurEl = document.getElementById('cashOutTotalEur');
+  const salesCountEl = document.getElementById('cashOutTotalSales');
+  const winCountEl = document.getElementById('cashOutWinCount');
+  const listEl = document.getElementById('cashOutList');
+
+  const totalNetProfitEur = cashOuts.reduce((acc, c) => acc + (c.netProfitEur || 0), 0);
+  const winCount = cashOuts.filter(c => (c.netProfit || 0) > 0).length;
+
+  if (totalEurEl) {
+    const sign = totalNetProfitEur >= 0 ? '+' : '';
+    totalEurEl.textContent = `${sign}${eurFormat.format(totalNetProfitEur)}`;
+    totalEurEl.style.color = totalNetProfitEur >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+  }
+
+  if (salesCountEl) salesCountEl.textContent = cashOuts.length;
+  if (winCountEl) winCountEl.textContent = winCount;
+
+  if (!listEl) return;
+
+  if (cashOuts.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <h3>${currentLang === 'en' ? 'No cash outs recorded yet' : 'Aucun encaissement pour l\'instant'}</h3>
+        <p>${currentLang === 'en' 
+          ? 'When you take profits and sell a position (or a tier), click "Cash Out" on the active position card to secure and track your realized profits here.' 
+          : 'Quand vous réalisez un bénéfice et vendez une position (ou un palier), cliquez sur "Encaisser" pour enregistrer votre gain acquis ici.'}</p>
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = cashOuts.map(item => {
+    const isWin = (item.netProfit || 0) >= 0;
+    const sign = isWin ? '+' : '';
+    const cur = item.currency || 'USD';
+    const profitText = `${sign}${formatCurrency(item.netProfit, cur)}`;
+    const eurEquiv = cur !== 'EUR' && item.netProfitEur !== undefined ? ` (${sign}${eurFormat.format(item.netProfitEur)})` : '';
+    const dateFormatted = formatDate(item.soldDate);
+
+    return `
+      <div class="cashout-item-card">
+        <div class="cashout-item-identity">
+          <span class="idea-symbol">${escapeHtml(item.symbol)}</span>
+          <div>
+            <div style="font-weight: 700; font-size: 15px;">${escapeHtml(item.name || item.symbol)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              ${item.sharesSold} ${currentLang === 'en' ? 'shares sold on' : 'parts vendues le'} ${dateFormatted} 
+              • ${currentLang === 'en' ? 'Sold at' : 'Vendu à'} ${formatCurrency(item.sellPrice, cur)} (${currentLang === 'en' ? 'Bought at' : 'Acheté à'} ${formatCurrency(item.buyPrice, cur)})
+              ${(item.sellFee || item.buyFee) ? ` • ${currentLang === 'en' ? 'Fees' : 'Frais'} : ${formatCurrency((item.sellFee || 0) + (item.buyFee || 0), cur)}` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="cashout-item-profit">
+            <div style="font-size: 17px; font-weight: 800; color: ${isWin ? 'var(--color-up)' : 'var(--color-down)'};">
+              ${profitText}${eurEquiv}
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">
+              ${currentLang === 'en' ? 'REALIZED NET PROFIT' : 'GAIN NET ACQUIS'}
+            </div>
+          </div>
+          <button class="btn-ghost-danger" onclick="deleteCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Delete this record' : 'Supprimer cet encaissement'}" style="padding: 6px 10px;">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function deleteCashOutRecord(id) {
+  const confirmDel = confirm(currentLang === 'en' ? 'Are you sure you want to delete this cash out record?' : 'Voulez-vous vraiment supprimer cet enregistrement d\'encaissement ?');
+  if (!confirmDel) return;
+
+  const local = getLocalData();
+  local.cashOuts = (local.cashOuts || []).filter(c => c.id !== id);
+  saveLocalData(local);
+  updateNavTabBadges();
+  renderCashOutTab();
+  pushToCloud();
+}
+
+// --- REVOLUT IDEAS TAB ---
+const REVOLUT_WATCHLIST = [
+  { symbol: 'SPCX', name: 'Procure Space ETF', type: 'ETF', currency: 'USD', desc: 'ETF spatial (SpaceX, lanceurs & télécoms spatiaux)' },
+  { symbol: 'VOO', name: 'Vanguard S&P 500 ETF', type: 'ETF', currency: 'USD', desc: 'Les 500 plus grandes entreprises américaines' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'STOCK', currency: 'USD', desc: 'Leader mondial des puces IA & cartes graphiques' },
+  { symbol: 'AAPL', name: 'Apple Inc.', type: 'STOCK', currency: 'USD', desc: 'Leader mondial de la tech et smartphones' },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'STOCK', currency: 'USD', desc: 'Cloud Azure d\'entreprise, Windows & IA' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'STOCK', currency: 'USD', desc: 'Véhicules électriques, robotique & énergie' },
+  { symbol: 'BTC-USD', name: 'Bitcoin', type: 'CRYPTO', currency: 'USD', desc: 'Première réserve de valeur numérique' },
+  { symbol: 'ETH-USD', name: 'Ethereum', type: 'CRYPTO', currency: 'USD', desc: 'Réseau leader des contrats intelligents' }
+];
+
+let ideasDataCache = null;
+
+async function renderIdeasTab() {
+  const gridEl = document.getElementById('ideasGrid');
+  if (!gridEl) return;
+
+  if (!ideasDataCache) {
+    gridEl.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+        <p style="font-size: 15px;">⏳ ${currentLang === 'en' ? 'Loading live Revolut quotes & technical indicators...' : 'Récupération des cours en direct et signaux techniques Revolut...'}</p>
+      </div>
+    `;
+
+    try {
+      const results = await Promise.all(
+        REVOLUT_WATCHLIST.map(async (item) => {
+          try {
+            const chartData = await fetchClientChart(item.symbol, 100);
+            const candles = chartData?.candles || [];
+            if (candles.length === 0) return { ...item, error: true };
+
+            const currentPrice = candles[candles.length - 1].close;
+            const startPrice = candles[0].close;
+            const changePct = ((currentPrice - startPrice) / startPrice) * 100;
+            const prices = candles.map(c => c.close);
+            const high30d = Math.max(...prices);
+            const low30d = Math.min(...prices);
+
+            let signalLabel = currentLang === 'en' ? 'Consolidating' : 'En consolidation';
+            let signalClass = 'status-badge-blue';
+
+            if (currentPrice <= low30d * 1.03) {
+              signalLabel = currentLang === 'en' ? '🟢 Key Support / Dip Buying' : '🟢 Support clé / Potentiel rebond';
+              signalClass = 'status-badge-up';
+            } else if (currentPrice >= high30d * 0.97) {
+              signalLabel = currentLang === 'en' ? '⚠️ Near 30d Peak' : '⚠️ Proche du sommet 30j';
+              signalClass = 'status-badge-orange';
+            } else if (changePct > 5) {
+              signalLabel = currentLang === 'en' ? '📈 Bullish Uptrend' : '📈 Tendance haussière';
+              signalClass = 'status-badge-up';
+            }
+
+            return {
+              ...item,
+              currentPrice,
+              changePct,
+              high30d,
+              low30d,
+              signalLabel,
+              signalClass
+            };
+          } catch (e) {
+            return { ...item, error: true };
+          }
+        })
+      );
+      ideasDataCache = results;
+    } catch (err) {
+      gridEl.innerHTML = `<div style="grid-column: 1 / -1; color: var(--color-down);">Erreur: ${err.message}</div>`;
+      return;
+    }
+  }
+
+  gridEl.innerHTML = ideasDataCache.map(idea => {
+    if (idea.error) {
+      return `
+        <div class="idea-card">
+          <div class="idea-top">
+            <span class="idea-symbol">${escapeHtml(idea.symbol)}</span>
+            <span class="idea-tag status-badge-blue">${escapeHtml(idea.type)}</span>
+          </div>
+          <div>
+            <div class="idea-name">${escapeHtml(idea.name)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${escapeHtml(idea.desc)}</div>
+          </div>
+          <button class="btn btn-secondary" onclick="quickAddIdea('${idea.symbol}', '${escapeJs(idea.name)}', '${idea.type}', '${idea.currency}')" style="width: 100%; font-size: 12px;">+ ${currentLang === 'en' ? 'Add to my portfolio' : 'Ajouter à mon portefeuille'}</button>
+        </div>
+      `;
+    }
+
+    const isUp = idea.changePct >= 0;
+    const sign = isUp ? '+' : '';
+
+    return `
+      <div class="idea-card">
+        <div class="idea-top">
+          <div>
+            <span class="idea-symbol">${escapeHtml(idea.symbol)}</span>
+            <span class="badge" style="margin-left: 6px; font-size: 10px;">${escapeHtml(idea.type)}</span>
+          </div>
+          <span class="idea-tag ${idea.signalClass}">${escapeHtml(idea.signalLabel)}</span>
+        </div>
+
+        <div>
+          <div class="idea-name">${escapeHtml(idea.name)}</div>
+          <div class="idea-price">${formatCurrency(idea.currentPrice, idea.currency)} 
+            <span style="font-size: 12px; font-weight: 700; color: ${isUp ? 'var(--color-up)' : 'var(--color-down)'}; margin-left: 6px;">
+              ${sign}${idea.changePct.toFixed(2)}% (30j)
+            </span>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+            ${escapeHtml(idea.desc)}
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+            Min 30j : <strong>${formatCurrency(idea.low30d, idea.currency)}</strong> • Max 30j : <strong>${formatCurrency(idea.high30d, idea.currency)}</strong>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="quickAddIdea('${idea.symbol}', '${escapeJs(idea.name)}', '${idea.type}', '${idea.currency}')" style="width: 100%; font-size: 12px; padding: 8px;">
+          + ${currentLang === 'en' ? 'Add to my portfolio' : 'Ajouter à mon portefeuille'}
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function quickAddIdea(symbol, name, type, currency) {
+  switchMainTab('active');
+  openPositionModal();
+  const symInput = document.getElementById('posSymbol');
+  const nameInput = document.getElementById('posName');
+  const curInput = document.getElementById('posCurrency');
+  const typeInput = document.getElementById('posType');
+
+  if (symInput) {
+    symInput.value = symbol;
+    symInput.dataset.auto = 'false';
+  }
+  if (nameInput) nameInput.value = name;
+  if (curInput) curInput.value = currency;
+  if (typeInput) typeInput.value = type;
+
+  updateCurrencyLabels();
+}
+
+// Window exports
+window.switchMainTab = switchMainTab;
+window.openCashOutModal = openCashOutModal;
+window.closeCashOutModal = closeCashOutModal;
+window.togglePositionDetails = togglePositionDetails;
+window.deleteCashOutRecord = deleteCashOutRecord;
+window.quickAddIdea = quickAddIdea;

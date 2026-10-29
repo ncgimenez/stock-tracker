@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stock & Crypto Tracker — Suivi Revolut Simplifié</title>
   <meta name="description" content="Suivi d'actions et cryptos Revolut sans graphiques. Dynamique jour par jour et suggestions d'action (Acheter / Garder / Vendre).">
-  <link rel="stylesheet" href="./css/style.css?v=1.1">
+  <link rel="stylesheet" href="./css/style.css?v=1.2">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -35,6 +35,11 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           <span>Actualiser</span>
         </button>
+        <button id="importCsvBtn" class="btn btn-secondary" title="Importer automatiquement un relevé CSV Revolut">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Importer Revolut (CSV)</span>
+        </button>
+        <input type="file" id="revolutCsvFileInput" accept=".csv,text/csv,text/plain" style="display: none;">
         <button id="addPositionBtn" class="btn btn-primary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span>Ajouter un achat</span>
@@ -149,10 +154,14 @@
           </div>
         </div>
 
-        <div class="form-row">
+        <div class="form-row form-row-3">
           <div class="form-group">
             <label for="posBuyDate">Date d'achat</label>
             <input type="date" id="posBuyDate">
+          </div>
+          <div class="form-group">
+            <label for="posBuyTime">Heure (facultatif)</label>
+            <input type="time" id="posBuyTime">
           </div>
           <div class="form-group">
             <label for="posCurrency">Devise d'achat</label>
@@ -248,9 +257,10 @@
               <p>Exportez vos positions pour les transférer sur un autre appareil (ex: Mac ➔ Smartphone) ou sauvegarder.</p>
             </div>
           </div>
-          <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button type="button" class="btn btn-secondary" id="exportDataBtn" style="font-size: 11px;">Exporter mes positions</button>
-            <button type="button" class="btn btn-secondary" id="importDataBtn" style="font-size: 11px;">Importer des positions</button>
+          <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" id="exportDataBtn" style="font-size: 11px;">Exporter mes positions (JSON)</button>
+            <button type="button" class="btn btn-secondary" id="importDataBtn" style="font-size: 11px;">Importer JSON</button>
+            <button type="button" class="btn btn-secondary" id="settingsImportCsvBtn" style="font-size: 11px;">📂 Importer CSV Revolut</button>
           </div>
         </div>
 
@@ -402,6 +412,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=1.3"></script>
+  <script src="./js/app.js?v=1.4"></script>
 </body>
 </html>

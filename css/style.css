@@ -793,6 +793,18 @@ body {
   gap: 12px;
 }
 
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
 label {
   display: block;
   font-size: 12px;

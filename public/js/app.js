@@ -112,6 +112,21 @@ const formatDayLabel = (dateStr, indexFromEnd) => {
   return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
+const getHoldingPeriodText = (dateStr, timeStr) => {
+  if (!dateStr) return '';
+  const dtStr = timeStr ? `${dateStr}T${timeStr}:00` : `${dateStr}T12:00:00`;
+  const buyTimestamp = new Date(dtStr).getTime();
+  if (isNaN(buyTimestamp)) return '';
+  const diffDays = Math.floor((Date.now() - buyTimestamp) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "aujourd'hui";
+  if (diffDays === 1) return "hier";
+  if (diffDays < 30) return `il y a ${diffDays}j`;
+  const months = Math.floor(diffDays / 30.4);
+  if (months < 12) return `il y a ${months} mois`;
+  const years = (diffDays / 365.25).toFixed(1);
+  return `il y a ${years} an${parseFloat(years) >= 2 ? 's' : ''}`;
+};
+
 // --- HASH HELPER (SHA-256) ---
 async function sha256(str) {
   const buf = new TextEncoder().encode(str + "_salt_st_2026");
@@ -282,6 +297,21 @@ function setupEventListeners() {
   if (exportBtn) exportBtn.addEventListener('click', exportData);
   const importBtn = document.getElementById('importDataBtn');
   if (importBtn) importBtn.addEventListener('click', importData);
+
+  // Revolut CSV Import
+  const importCsvBtn = document.getElementById('importCsvBtn');
+  const settingsImportCsvBtn = document.getElementById('settingsImportCsvBtn');
+  const revolutCsvFileInput = document.getElementById('revolutCsvFileInput');
+
+  if (importCsvBtn && revolutCsvFileInput) {
+    importCsvBtn.addEventListener('click', () => revolutCsvFileInput.click());
+  }
+  if (settingsImportCsvBtn && revolutCsvFileInput) {
+    settingsImportCsvBtn.addEventListener('click', () => revolutCsvFileInput.click());
+  }
+  if (revolutCsvFileInput) {
+    revolutCsvFileInput.addEventListener('change', handleCsvFileSelect);
+  }
 
   // Sliders
   const targetProfitRange = document.getElementById('targetProfitRange');
@@ -934,6 +964,7 @@ async function buildPortfolioData() {
         symbol: pos.symbol,
         name: pos.name || chart.shortName,
         buyDate: pos.buyDate,
+        buyTime: pos.buyTime || '',
         buyPrice: buyPrice,
         shares: shares,
         investedEur: investedEur,
@@ -958,6 +989,7 @@ async function buildPortfolioData() {
         symbol: pos.symbol,
         name: pos.name || pos.symbol,
         buyDate: pos.buyDate,
+        buyTime: pos.buyTime || '',
         buyPrice: pos.buyPrice,
         shares: pos.shares,
         investedEur: pos.investedAmount || 0,
@@ -1022,6 +1054,7 @@ function renderInstantPositions(local) {
       symbol: pos.symbol,
       name: pos.name || pos.symbol,
       buyDate: pos.buyDate,
+      buyTime: pos.buyTime || '',
       buyPrice: buyPrice,
       shares: shares,
       investedEur: investedEur,
@@ -1165,6 +1198,10 @@ function renderPositions() {
       const changeClass = isUp ? 'up' : (isDown ? 'down' : 'flat');
       const arrow = isUp ? '▲' : (isDown ? '▼' : '—');
       const dayLabel = formatDayLabel(day.dateStr, idx);
+      const isBuyDay = day.dateStr === pos.buyDate;
+      const buyMarkerHtml = isBuyDay
+        ? `<span class="buy-marker-tag" style="display:inline-block; font-size:10px; font-weight:700; color:var(--color-up); background:rgba(16,185,129,0.18); padding:1px 5px; border-radius:4px; margin-top:3px;">📍 Achat</span>`
+        : '';
 
       return `
         <div class="day-cell ${trendClass}">
@@ -1174,9 +1211,14 @@ function renderPositions() {
             ${arrow} ${pctFormat(day.changePct)}
           </span>
           <span class="day-cell-val">Portefeuille: ${eurFormat.format(day.dayValueEur)}</span>
+          ${buyMarkerHtml}
         </div>
       `;
     }).join('');
+
+    const holdingText = getHoldingPeriodText(pos.buyDate, pos.buyTime);
+    const timeText = pos.buyTime ? ` à ${escapeHtml(pos.buyTime)}` : '';
+    const holdingBadge = holdingText ? ` (${holdingText})` : '';
 
     return `
       <article class="pos-card" data-id="${pos.id}">
@@ -1185,7 +1227,7 @@ function renderPositions() {
             <span class="pos-symbol-pill">${escapeHtml(pos.symbol)}</span>
             <div>
               <h3 class="pos-name">${escapeHtml(pos.name)}</h3>
-              <p class="pos-meta">Acheté le ${formatDateFR(pos.buyDate)} • ${pos.shares} parts @ ${pos.buyPrice.toFixed(2)} ${pos.currency}</p>
+              <p class="pos-meta">Acheté le ${formatDateFR(pos.buyDate)}${timeText}${holdingBadge} • ${pos.shares} parts @ ${pos.buyPrice.toFixed(2)} ${pos.currency}</p>
             </div>
           </div>
 
@@ -1317,6 +1359,8 @@ window.openPositionModal = function() {
   document.getElementById('posId').value = '';
   document.getElementById('modalTitle').textContent = 'Ajouter un achat Revolut';
   document.getElementById('posBuyDate').value = new Date().toISOString().split('T')[0];
+  const timeEl = document.getElementById('posBuyTime');
+  if (timeEl) timeEl.value = '';
   autocompleteDropdown.style.display = 'none';
   positionModal.classList.add('active');
 };
@@ -1332,6 +1376,8 @@ window.editPosition = function(id) {
   document.getElementById('posSymbol').value = pos.symbol || '';
   document.getElementById('posName').value = pos.name || '';
   document.getElementById('posBuyDate').value = pos.buyDate || '';
+  const timeEl = document.getElementById('posBuyTime');
+  if (timeEl) timeEl.value = pos.buyTime || '';
   document.getElementById('posCurrency').value = pos.currency || 'EUR';
   document.getElementById('posInvestedAmount').value = pos.investedAmount || '';
   document.getElementById('posShares').value = pos.shares || '';
@@ -1364,6 +1410,7 @@ async function handleFormSubmit(e) {
   if (!name) name = 'Mon investissement';
 
   const buyDate = document.getElementById('posBuyDate').value || new Date().toISOString().split('T')[0];
+  const buyTime = document.getElementById('posBuyTime')?.value || '';
   const currency = document.getElementById('posCurrency').value || 'EUR';
   const investedAmount = parseFloat(document.getElementById('posInvestedAmount').value) || 0;
   const shares = parseFloat(document.getElementById('posShares').value) || 1;
@@ -1375,6 +1422,7 @@ async function handleFormSubmit(e) {
     symbol: symbol.toUpperCase(),
     name: name,
     buyDate,
+    buyTime,
     currency,
     investedAmount,
     shares,
@@ -1505,6 +1553,188 @@ function importData() {
   } catch (e) {
     alert('Erreur: JSON invalide.');
   }
+}
+
+// --- REVOLUT CSV PARSER & IMPORTER ---
+function parseRevolutCSV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error("Le fichier est vide ou invalide.");
+
+  const firstLine = lines[0];
+  const delim = firstLine.includes(";") ? ";" : (firstLine.includes("\t") ? "\t" : ",");
+
+  function parseCSVLine(line) {
+    const res = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') inQuotes = !inQuotes;
+      else if (c === delim && !inQuotes) {
+        res.push(cur.trim().replace(/^"|"$/g, ""));
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    res.push(cur.trim().replace(/^"|"$/g, ""));
+    return res;
+  }
+
+  const rawHeaders = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+
+  const idxDate = rawHeaders.findIndex(h => h.includes("date") || h.includes("exécution") || h.includes("time") || h.includes("started"));
+  let idxTicker = rawHeaders.findIndex(h => h.includes("ticker") || h.includes("symbol") || h.includes("symbole") || h.includes("asset") || h.includes("code") || h.includes("product"));
+  const idxDesc = rawHeaders.findIndex(h => h.includes("description") || h.includes("libellé") || h.includes("nom") || h.includes("name"));
+  const idxType = rawHeaders.findIndex(h => h.includes("type") || h.includes("action") || h.includes("side") || h.includes("opération"));
+  const idxQty = rawHeaders.findIndex(h => h.includes("quantity") || h.includes("shares") || h.includes("quantité") || h.includes("units") || h.includes("parts"));
+  const idxPrice = rawHeaders.findIndex(h => h.includes("price") || h.includes("prix") || h.includes("rate") || h.includes("cours"));
+  const idxAmount = rawHeaders.findIndex(h => h.includes("total amount") || h.includes("montant total") || h.includes("amount") || h.includes("montant") || h.includes("total") || h.includes("cost basis") || h.includes("fiat"));
+  const idxCur = rawHeaders.findIndex(h => h.includes("currency") || h.includes("devise"));
+
+  const map = new Map();
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i]);
+    if (!row || row.length === 0) continue;
+
+    let rawTicker = (idxTicker >= 0 ? row[idxTicker] : "") || "";
+    const desc = (idxDesc >= 0 ? row[idxDesc] : "") || "";
+
+    // If ticker not found, try extracting from description (common in Revolut Crypto)
+    if (!rawTicker && desc) {
+      const match = desc.match(/(?:Bought|Achat|Acheté|Purchased|Sold|Vendu|Vente)\s+([A-Za-z0-9\.\-]+)/i);
+      if (match) {
+        rawTicker = match[1];
+      } else {
+        const parts = desc.trim().split(/\s+/);
+        rawTicker = parts[parts.length - 1];
+      }
+    }
+
+    rawTicker = rawTicker.trim().toUpperCase();
+    if (!rawTicker || rawTicker === "USD" || rawTicker === "EUR" || rawTicker === "GBP") continue;
+
+    const typeStr = (idxType >= 0 ? row[idxType] || "" : "BUY").toUpperCase();
+    const isSell = typeStr.includes("SELL") || typeStr.includes("VENTE") || typeStr.includes("VENDU");
+    const isBuy = typeStr.includes("BUY") || typeStr.includes("ACHAT") || typeStr.includes("ACHET") || (!isSell);
+
+    const rawDateStr = idxDate >= 0 ? (row[idxDate] || "").trim() : "";
+    let buyDate = "";
+    let buyTime = "";
+    if (rawDateStr) {
+      const parts = rawDateStr.split(/[ T]/);
+      buyDate = parts[0];
+      if (parts[1]) buyTime = parts[1].substring(0, 5);
+      if (buyDate.includes("/")) {
+        const dParts = buyDate.split("/");
+        if (dParts.length === 3 && dParts[0].length <= 2 && dParts[2].length === 4) {
+          buyDate = `${dParts[2]}-${dParts[1].padStart(2, "0")}-${dParts[0].padStart(2, "0")}`;
+        }
+      }
+    }
+
+    const qty = Math.abs(parseFloat((row[idxQty] || "0").replace(",", "."))) || 0;
+    const price = Math.abs(parseFloat((row[idxPrice] || "0").replace(",", "."))) || 0;
+    const amount = Math.abs(parseFloat((row[idxAmount] || "0").replace(",", "."))) || (qty * price);
+    const currency = idxCur >= 0 ? (row[idxCur] || "EUR").toUpperCase() : "EUR";
+
+    if (!map.has(rawTicker)) {
+      map.set(rawTicker, {
+        symbol: rawTicker,
+        name: desc || rawTicker,
+        shares: 0,
+        investedAmount: 0,
+        currency,
+        buyDate: buyDate || new Date().toISOString().split("T")[0],
+        buyTime: buyTime || ""
+      });
+    }
+
+    const entry = map.get(rawTicker);
+    if (isBuy) {
+      entry.shares += qty;
+      entry.investedAmount += amount;
+      if (buyDate) {
+        entry.buyDate = buyDate;
+        entry.buyTime = buyTime;
+      }
+    } else if (isSell) {
+      const prevShares = entry.shares;
+      entry.shares = Math.max(0, entry.shares - qty);
+      if (prevShares > 0) {
+        entry.investedAmount = Math.max(0, entry.investedAmount * (entry.shares / prevShares));
+      }
+    }
+  }
+
+  return Array.from(map.values())
+    .filter(p => p.shares > 0.000001)
+    .map(p => ({
+      id: "pos_" + p.symbol.toLowerCase().replace(/[^a-z0-9]/g, "") + "_" + Math.random().toString(36).substring(2, 7),
+      symbol: p.symbol,
+      name: p.name !== p.symbol ? p.name : p.symbol,
+      buyDate: p.buyDate,
+      buyTime: p.buyTime,
+      currency: p.currency,
+      shares: Math.round(p.shares * 100000000) / 100000000,
+      investedAmount: Math.round(p.investedAmount * 100) / 100,
+      buyPrice: p.shares > 0 ? Math.round((p.investedAmount / p.shares) * 100) / 100 : 0,
+      notes: "Importé depuis relevé Revolut"
+    }));
+}
+
+async function handleCsvFileSelect(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const content = evt.target.result;
+      const parsedPositions = parseRevolutCSV(content);
+
+      if (!parsedPositions || parsedPositions.length === 0) {
+        alert("Aucune position d'achat active n'a été trouvée dans ce relevé Revolut.\n\nVérifiez que le fichier contient bien des ordres d'achat d'actions ou de crypto.");
+        return;
+      }
+
+      const summaryList = parsedPositions.map(p => `${p.symbol} (${p.shares} parts)`).join(', ');
+      const confirmAdd = confirm(
+        `✅ ${parsedPositions.length} position(s) active(s) détectée(s) :\n${summaryList}\n\n` +
+        `Voulez-vous les ajouter à votre portefeuille ?\n` +
+        `(Les positions existantes portant le même symbole seront mises à jour).`
+      );
+
+      if (!confirmAdd) return;
+
+      const local = getLocalData();
+      const existing = local.positions || [];
+
+      parsedPositions.forEach(newPos => {
+        const foundIdx = existing.findIndex(p => p.symbol.toUpperCase() === newPos.symbol.toUpperCase());
+        if (foundIdx >= 0) {
+          existing[foundIdx] = { ...existing[foundIdx], ...newPos, id: existing[foundIdx].id };
+        } else {
+          existing.push(newPos);
+        }
+      });
+
+      local.positions = existing;
+      saveLocalData(local);
+
+      alert(`🎉 ${parsedPositions.length} position(s) Revolut ajoutée(s) avec succès !`);
+      
+      e.target.value = '';
+      closeSettingsModal();
+      loadPortfolio(true);
+      pushToCloud();
+    } catch (err) {
+      alert(`Erreur lors de la lecture du fichier CSV Revolut : ${err.message}`);
+    }
+  };
+
+  reader.readAsText(file);
 }
 
 // --- THEME ---

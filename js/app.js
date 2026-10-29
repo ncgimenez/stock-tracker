@@ -2213,7 +2213,32 @@ function renderPositions() {
           </div>
         </div>
 
-        <!-- LIVE MARKET & SUPPORT STRIP -->
+        <!-- 1. MY CAPITAL & POSITION METRICS (TOP PRIORITY: USER'S MONEY) -->
+        <div class="pos-metrics-grid">
+          <div class="metric-card">
+            <span class="metric-card-label">${t("myInvestedCapital")}</span>
+            <span class="metric-card-val">${investedFormatted}</span>
+            ${convertedInvested}
+          </div>
+          <div class="metric-card">
+            <span class="metric-card-label">${t("myCurrentPortfolioVal")}</span>
+            <span class="metric-card-val">${currentValFormatted}</span>
+            <span class="metric-card-sub" style="font-weight:600; color:var(--text-main);">
+              ${t("sharesTimesPrice", { shares: pos.shares, price: sharePriceFormatted })}${convertedCurrentRaw ? ` • ${convertedCurrentRaw}` : ''}
+            </span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-card-label">${hasFees ? t("myNetProfitLabel") : t("totalGain")}</span>
+            <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
+              ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
+            </span>
+            <span class="metric-card-sub">
+              ${hasFees ? `${t("grossShort")}${gainFormatted}${convertedGain} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}` : (pos.currency !== "EUR" ? convertedGain : "")}
+            </span>
+          </div>
+        </div>
+
+        <!-- 2. LIVE MARKET & TECHNICAL SUPPORT STRIP (MARKET CONTEXT) -->
         <div class="pos-live-bar">
           <div class="live-bar-col">
             <div class="live-bar-label">
@@ -2260,38 +2285,6 @@ function renderPositions() {
               <span class="live-current-indicator">▲ ${sharePriceFormatted} (${rangePercent.toFixed(0)}%)</span>
               <span>${dayHighFormatted}</span>
             </div>
-          </div>
-        </div>
-
-        <div class="pos-metrics-grid">
-          <div class="metric-card">
-            <span class="metric-card-label">${t("myInvestedCapital")}</span>
-            <span class="metric-card-val">${investedFormatted}</span>
-            ${convertedInvested}
-          </div>
-          <div class="metric-card">
-            <span class="metric-card-label">${t("myCurrentPortfolioVal")}</span>
-            <span class="metric-card-val">${currentValFormatted}</span>
-            <span class="metric-card-sub" style="font-weight:600; color:var(--text-main);">
-              ${t("sharesTimesPrice", { shares: pos.shares, price: sharePriceFormatted })}${convertedCurrentRaw ? ` • ${convertedCurrentRaw}` : ''}
-            </span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-card-label">${hasFees ? t("myNetProfitLabel") : t("totalGain")}</span>
-            <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
-              ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
-            </span>
-            <span class="metric-card-sub">
-              ${hasFees ? `${t("grossShort")}${gainFormatted}${convertedGain} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}` : (pos.currency !== "EUR" ? convertedGain : "")}
-            </span>
-          </div>
-        </div>
-            <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
-              ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
-            </span>
-            <span class="metric-card-sub">
-              ${hasFees ? `${t("grossShort")}${gainFormatted}${convertedGain} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}` : (pos.currency !== "EUR" ? convertedGain : "")}
-            </span>
           </div>
         </div>
 

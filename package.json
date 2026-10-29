@@ -1,0 +1,20 @@
+{
+  "name": "stock-tracker",
+  "version": "1.0.0",
+  "description": "Suivi d'actions et cryptos Revolut simplifié, sans graphiques, avec progression jour par jour et suggestions de décision.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "stocks",
+    "tracker",
+    "revolut",
+    "portfolio",
+    "finance"
+  ],
+  "author": "Nadia Canadas Gimenez",
+  "license": "MIT"
+}

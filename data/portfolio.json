@@ -1,0 +1,46 @@
+{
+  "settings": {
+    "currency": "EUR",
+    "profitTargetPercent": 15,
+    "stopLossPercent": -10,
+    "consecutiveDownDaysAlert": 3,
+    "consecutiveUpDaysAlert": 3,
+    "dipBuyThresholdPercent": -3,
+    "defaultPeriodDays": 7
+  },
+  "positions": [
+    {
+      "id": "pos_apple",
+      "symbol": "AAPL",
+      "name": "Apple Inc.",
+      "buyDate": "2026-09-15",
+      "buyPrice": 225.50,
+      "shares": 2.5,
+      "investedAmount": 563.75,
+      "currency": "USD",
+      "notes": "Achat Revolut"
+    },
+    {
+      "id": "pos_nvidia",
+      "symbol": "NVDA",
+      "name": "NVIDIA Corporation",
+      "buyDate": "2026-10-01",
+      "buyPrice": 120.00,
+      "shares": 4,
+      "investedAmount": 480.00,
+      "currency": "USD",
+      "notes": "Tech IA"
+    },
+    {
+      "id": "pos_lvmh",
+      "symbol": "MC.PA",
+      "name": "LVMH Moët Hennessy",
+      "buyDate": "2026-08-20",
+      "buyPrice": 640.00,
+      "shares": 0.5,
+      "investedAmount": 320.00,
+      "currency": "EUR",
+      "notes": "Luxe"
+    }
+  ]
+}

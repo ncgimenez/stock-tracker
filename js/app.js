@@ -2102,10 +2102,11 @@ function renderPositions() {
             </div>
           </div>
 
-          <div>
-            <span class="suggestion-badge ${sug.badgeClass || "badge-neutral"}" style="font-size:12px; font-weight:800; padding:6px 12px;">
+          <div class="pos-decision-box">
+            <span class="suggestion-badge ${sug.badgeClass || "badge-neutral"}">
               ${escapeHtml(sug.label || t("sugHold"))}
             </span>
+            ${sug.reason ? `<p class="pos-decision-reason">${escapeHtml(sug.reason)}</p>` : ''}
           </div>
         </div>
 
@@ -2132,15 +2133,6 @@ function renderPositions() {
         </div>
 
         ${journeyHtml}
-
-        <div class="suggestion-banner ${bannerClass}">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span class="suggestion-badge ${sug.badgeClass || "badge-neutral"}">
-              ${escapeHtml(sug.label || t("sugHold"))}
-            </span>
-            <span class="suggestion-reason">${escapeHtml(sug.reason || "")}</span>
-          </div>
-        </div>
 
         <div class="day-strip-wrapper">
           <div class="strip-header">

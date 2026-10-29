@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 let PORT = process.env.PORT || 3001;
 const DATA_FILE = path.join(__dirname, 'data', 'portfolio.json');
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const PUBLIC_DIR = __dirname;
 
 // Cache in-memory for financial queries (TTL: 3 minutes)
 const cache = {

@@ -138,12 +138,14 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="posSymbol">Symbole retenu</label>
-            <input type="text" id="posSymbol" placeholder="AAPL" required readonly class="readonly-input">
+            <label for="posSymbol">Symbole retenu (Ticker)</label>
+            <input type="text" id="posSymbol" placeholder="Ex: SPCX, AAPL, BTC-USD" required>
+            <small class="form-hint">Le code boursier officiel.</small>
           </div>
           <div class="form-group">
             <label for="posName">Nom affiché</label>
-            <input type="text" id="posName" placeholder="Apple Inc." required>
+            <input type="text" id="posName" placeholder="Ex: SpaceX, Apple..." required>
+            <small class="form-hint">Votre titre personnalisé.</small>
           </div>
         </div>
 
@@ -165,19 +167,19 @@
         <div class="form-row">
           <div class="form-group">
             <label for="posInvestedAmount">Montant total investi (€)</label>
-            <input type="number" id="posInvestedAmount" step="0.01" min="0" placeholder="Ex: 500" required>
+            <input type="number" id="posInvestedAmount" step="any" min="0" placeholder="Ex: 48.82" required>
             <small class="form-hint">Ce que vous avez payé sur Revolut.</small>
           </div>
           <div class="form-group">
             <label for="posShares">Nombre de parts / actions</label>
-            <input type="number" id="posShares" step="0.000001" min="0" placeholder="Ex: 2.5" required>
-            <small class="form-hint">Nombre d'actions ou fraction de part.</small>
+            <input type="number" id="posShares" step="any" min="0" placeholder="Ex: 0.36386588" required>
+            <small class="form-hint">Nombre précis avec toutes les décimales.</small>
           </div>
         </div>
 
         <div class="form-group">
           <label for="posBuyPrice">Prix d'achat unitaire (estimé)</label>
-          <input type="number" id="posBuyPrice" step="0.01" min="0" placeholder="Calculé automatiquement" readonly class="readonly-input">
+          <input type="number" id="posBuyPrice" step="any" min="0" placeholder="Calculé automatiquement" class="readonly-input">
         </div>
 
         <div class="form-group">

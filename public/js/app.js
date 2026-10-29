@@ -268,8 +268,28 @@ function setupEventListeners() {
     document.getElementById('downDaysVal').textContent = `${e.target.value} jours`;
   });
 
-  // Autocomplete
-  posSearchInput.addEventListener('input', handleSearchInput);
+  // Autocomplete and auto-sync symbol/name
+  posSearchInput.addEventListener('input', (e) => {
+    handleSearchInput(e);
+    const symInput = document.getElementById('posSymbol');
+    const nameInput = document.getElementById('posName');
+    const val = e.target.value.trim();
+    if (!symInput.value || symInput.dataset.auto === 'true') {
+      symInput.value = val.toUpperCase();
+      symInput.dataset.auto = 'true';
+    }
+    if (!nameInput.value || nameInput.dataset.auto === 'true') {
+      nameInput.value = val;
+      nameInput.dataset.auto = 'true';
+    }
+  });
+
+  document.getElementById('posSymbol').addEventListener('input', () => {
+    document.getElementById('posSymbol').dataset.auto = 'false';
+  });
+  document.getElementById('posName').addEventListener('input', () => {
+    document.getElementById('posName').dataset.auto = 'false';
+  });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.search-input-wrapper')) {
       autocompleteDropdown.style.display = 'none';
@@ -1190,29 +1210,53 @@ function closePositionModal() {
 async function handleFormSubmit(e) {
   e.preventDefault();
 
-  const symbol = document.getElementById('posSymbol').value;
-  const name = document.getElementById('posName').value;
+  let symbol = document.getElementById('posSymbol').value.trim();
+  let name = document.getElementById('posName').value.trim();
+  const searchVal = document.getElementById('posSearch').value.trim();
+
+  // Fallback: if user typed ticker in search but didn't click dropdown
+  if (!symbol && searchVal) {
+    symbol = searchVal.toUpperCase();
+  }
+  if (!name && searchVal) {
+    name = searchVal;
+  }
+
   const buyDate = document.getElementById('posBuyDate').value;
   const currency = document.getElementById('posCurrency').value;
   const investedAmount = parseFloat(document.getElementById('posInvestedAmount').value);
   const shares = parseFloat(document.getElementById('posShares').value);
-  const buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || 0;
+  const buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || (shares > 0 ? investedAmount / shares : 0);
   const notes = document.getElementById('posNotes').value;
 
-  if (!symbol || !buyDate || !investedAmount || !shares) {
-    alert('Veuillez remplir les informations requises.');
+  if (!symbol) {
+    alert('Veuillez renseigner le symbole retenu (ex: SPCX, AAPL, BTC-USD).');
+    return;
+  }
+  if (!buyDate) {
+    alert('Veuillez renseigner la date d\'achat.');
+    return;
+  }
+  if (isNaN(investedAmount) || investedAmount <= 0) {
+    alert('Veuillez indiquer un montant investi valide.');
+    return;
+  }
+  if (isNaN(shares) || shares <= 0) {
+    alert('Veuillez indiquer un nombre de parts valide.');
     return;
   }
 
   const newPos = {
     id: 'pos_' + Date.now(),
-    symbol: symbol.trim().toUpperCase(),
-    name: name || symbol.trim().toUpperCase(),
+    symbol: symbol.toUpperCase(),
+    name: name || symbol.toUpperCase(),
     buyDate,
     currency,
     investedAmount,
     shares,
     buyPrice,
+    notes
+  };
     notes
   };
 

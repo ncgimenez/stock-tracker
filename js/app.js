@@ -958,17 +958,43 @@ function setupEventListeners() {
   const sharesInput = document.getElementById('posShares');
   const unitPriceInput = document.getElementById('posBuyPrice');
 
-  const updateUnitPrice = () => {
+  let isUpdatingInputs = false;
+
+  const updateFromInvested = () => {
+    if (isUpdatingInputs) return;
+    isUpdatingInputs = true;
     const inv = parseFloat(investedInput.value);
     const sh = parseFloat(sharesInput.value);
     if (inv > 0 && sh > 0) {
       unitPriceInput.value = (inv / sh).toFixed(2);
-    } else {
-      unitPriceInput.value = '';
     }
+    isUpdatingInputs = false;
   };
-  investedInput.addEventListener('input', updateUnitPrice);
-  sharesInput.addEventListener('input', updateUnitPrice);
+
+  const updateFromPrice = () => {
+    if (isUpdatingInputs) return;
+    isUpdatingInputs = true;
+    const pr = parseFloat(unitPriceInput.value);
+    const sh = parseFloat(sharesInput.value);
+    if (pr > 0 && sh > 0) {
+      investedInput.value = (pr * sh).toFixed(2);
+    }
+    isUpdatingInputs = false;
+  };
+
+  if (investedInput && sharesInput && unitPriceInput) {
+    investedInput.addEventListener('input', updateFromInvested);
+    unitPriceInput.addEventListener('input', updateFromPrice);
+    sharesInput.addEventListener('input', () => {
+      const inv = parseFloat(investedInput.value);
+      const pr = parseFloat(unitPriceInput.value);
+      if (inv > 0) {
+        updateFromInvested();
+      } else if (pr > 0) {
+        updateFromPrice();
+      }
+    });
+  }
 
   positionForm.addEventListener('submit', handleFormSubmit);
 }
@@ -1280,7 +1306,21 @@ function getLocalData() {
     return DEFAULT_STORAGE;
   }
   try {
-    return JSON.parse(raw);
+    const data = JSON.parse(raw);
+    // Auto-repair any position with missing or zero investedAmount or buyPrice
+    if (data && Array.isArray(data.positions)) {
+      data.positions.forEach(pos => {
+        const sh = parseFloat(pos.shares) || 0;
+        let inv = parseFloat(pos.investedAmount) || 0;
+        let pr = parseFloat(pos.buyPrice) || 0;
+        if (inv <= 0 && sh > 0 && pr > 0) {
+          pos.investedAmount = Math.round((sh * pr) * 100) / 100;
+        } else if (pr <= 0 && sh > 0 && inv > 0) {
+          pos.buyPrice = Math.round((inv / sh) * 100) / 100;
+        }
+      });
+    }
+    return data;
   } catch (e) {
     return DEFAULT_STORAGE;
   }
@@ -2473,9 +2513,16 @@ async function handleFormSubmit(e) {
   const buyDate = document.getElementById('posBuyDate').value || new Date().toISOString().split('T')[0];
   const buyTime = document.getElementById('posBuyTime')?.value || '';
   const currency = document.getElementById('posCurrency').value || 'EUR';
-  const investedAmount = parseFloat(document.getElementById('posInvestedAmount').value) || 0;
   const shares = parseFloat(document.getElementById('posShares').value) || 1;
-  const buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || (shares > 0 && investedAmount > 0 ? investedAmount / shares : 0);
+  let investedAmount = parseFloat(document.getElementById('posInvestedAmount').value) || 0;
+  let buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || 0;
+
+  if (investedAmount <= 0 && buyPrice > 0 && shares > 0) {
+    investedAmount = Math.round((shares * buyPrice) * 100) / 100;
+  }
+  if (buyPrice <= 0 && investedAmount > 0 && shares > 0) {
+    buyPrice = Math.round((investedAmount / shares) * 100) / 100;
+  }
   const buyFee = parseFloat(document.getElementById('posBuyFee')?.value) || 0;
   const sellFee = parseFloat(document.getElementById('posSellFee')?.value) || 0;
   const notes = document.getElementById('posNotes').value;
@@ -2653,6 +2700,13 @@ function parseRevolutCSV(text) {
     return res;
   }
 
+  function cleanNumber(str) {
+    if (!str && str !== 0) return 0;
+    const cleaned = str.toString().replace(/[^0-9.,-]/g, "").replace(",", ".");
+    const val = parseFloat(cleaned);
+    return isNaN(val) ? 0 : Math.abs(val);
+  }
+
   const rawHeaders = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
 
   const idxDate = rawHeaders.findIndex(h => h.includes("date") || h.includes("exécution") || h.includes("time") || h.includes("started"));
@@ -2707,11 +2761,26 @@ function parseRevolutCSV(text) {
       }
     }
 
-    const qty = Math.abs(parseFloat((row[idxQty] || "0").replace(",", "."))) || 0;
-    const price = Math.abs(parseFloat((row[idxPrice] || "0").replace(",", "."))) || 0;
-    const amount = Math.abs(parseFloat((row[idxAmount] || "0").replace(",", "."))) || (qty * price);
-    const fee = idxFee >= 0 ? Math.abs(parseFloat((row[idxFee] || "0").replace(",", "."))) || 0 : 0;
-    const currency = idxCur >= 0 ? (row[idxCur] || "EUR").toUpperCase() : "EUR";
+    const qty = cleanNumber(row[idxQty]);
+    let price = cleanNumber(row[idxPrice]);
+    let amount = cleanNumber(row[idxAmount]);
+
+    if (!amount && qty > 0 && price > 0) {
+      amount = Math.round((qty * price) * 100) / 100;
+    }
+    if (!price && qty > 0 && amount > 0) {
+      price = Math.round((amount / qty) * 100) / 100;
+    }
+
+    const fee = idxFee >= 0 ? cleanNumber(row[idxFee]) : 0;
+    let currency = idxCur >= 0 ? (row[idxCur] || "").trim().toUpperCase() : "";
+    if (!currency || currency.length !== 3) {
+      const rawAmt = row[idxAmount] || "";
+      if (rawAmt.includes("$")) currency = "USD";
+      else if (rawAmt.includes("€")) currency = "EUR";
+      else if (rawAmt.includes("£")) currency = "GBP";
+      else currency = "USD";
+    }
 
     if (!map.has(rawTicker)) {
       map.set(rawTicker, {
@@ -2719,6 +2788,7 @@ function parseRevolutCSV(text) {
         name: desc || rawTicker,
         shares: 0,
         investedAmount: 0,
+        buyPrice: price,
         buyFee: 0,
         sellFee: 0,
         currency,
@@ -2733,6 +2803,7 @@ function parseRevolutCSV(text) {
       entry.investedAmount += amount;
       entry.buyFee += fee;
       entry.sellFee = entry.buyFee;
+      if (price > 0) entry.buyPrice = price;
       if (buyDate) {
         entry.buyDate = buyDate;
         entry.buyTime = buyTime;
@@ -2748,21 +2819,30 @@ function parseRevolutCSV(text) {
 
   return Array.from(map.values())
     .filter(p => p.shares > 0.000001)
-    .map(p => ({
-      id: "pos_" + p.symbol.toLowerCase().replace(/[^a-z0-9]/g, "") + "_" + Math.random().toString(36).substring(2, 7),
-      symbol: p.symbol,
-      name: p.name !== p.symbol ? p.name : p.symbol,
-      buyDate: p.buyDate,
-      buyTime: p.buyTime,
-      currency: p.currency,
-      shares: Math.round(p.shares * 100000000) / 100000000,
-      investedAmount: Math.round(p.investedAmount * 100) / 100,
-      buyPrice: p.shares > 0 ? Math.round((p.investedAmount / p.shares) * 100) / 100 : 0,
-      buyFee: Math.round((p.buyFee || 0) * 100) / 100,
-      sellFee: Math.round((p.buyFee || 0) * 100) / 100,
-      feeVerified: (p.buyFee > 0),
-      notes: "Importé depuis relevé Revolut"
-    }));
+    .map(p => {
+      const shares = Math.round(p.shares * 100000000) / 100000000;
+      let investedAmount = Math.round(p.investedAmount * 100) / 100;
+      let buyPrice = shares > 0 ? Math.round((investedAmount / shares) * 100) / 100 : (p.buyPrice || 0);
+      if (investedAmount === 0 && buyPrice > 0 && shares > 0) {
+        investedAmount = Math.round((shares * buyPrice) * 100) / 100;
+      }
+
+      return {
+        id: "pos_" + p.symbol.toLowerCase().replace(/[^a-z0-9]/g, "") + "_" + Math.random().toString(36).substring(2, 7),
+        symbol: p.symbol,
+        name: p.name !== p.symbol ? p.name : p.symbol,
+        buyDate: p.buyDate,
+        buyTime: p.buyTime,
+        currency: p.currency,
+        shares,
+        investedAmount,
+        buyPrice,
+        buyFee: Math.round((p.buyFee || 0) * 100) / 100,
+        sellFee: Math.round((p.buyFee || 0) * 100) / 100,
+        feeVerified: (p.buyFee > 0),
+        notes: "Importé depuis relevé Revolut"
+      };
+    });
 }
 
 async function handleCsvFileSelect(e) {

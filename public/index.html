@@ -20,6 +20,10 @@
         <p class="brand-subtitle">Progression jour par jour • Zéro graphique inutile • Aide à la décision</p>
       </div>
       <div class="header-actions">
+        <div class="lang-switch" id="langSwitch" title="Changer de langue / Switch language">
+          <button type="button" class="lang-btn active" data-lang="fr">FR</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
         <button id="securityModalBtn" class="btn btn-secondary" title="Sécurité, Code PIN & Appareils">
           <span id="securityStatusIcon">🔒</span>
           <span id="securityBtnText">Sécurité & Appareils</span>
@@ -175,7 +179,7 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="posInvestedAmount">Montant total investi (€)</label>
+            <label for="posInvestedAmount" id="investedAmountLabel">Montant total investi (€)</label>
             <input type="number" id="posInvestedAmount" step="any" min="0" placeholder="Ex: 48.82">
             <small class="form-hint">Ce que vous avez payé sur Revolut.</small>
           </div>
@@ -412,6 +416,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=1.5"></script>
+  <script src="./js/app.js?v=1.6"></script>
 </body>
 </html>

@@ -86,6 +86,216 @@ const positionForm = document.getElementById('positionForm');
 const autocompleteDropdown = document.getElementById('autocompleteDropdown');
 const posSearchInput = document.getElementById('posSearch');
 
+// --- INTERNATIONALIZATION (I18N) ---
+let currentLang = localStorage.getItem('st_lang') || 'fr';
+
+const I18N = {
+  fr: {
+    brandBadge: "REVOLUT TRACKER",
+    brandTitle: "Suivi de Portefeuille",
+    brandSubtitle: "Progression jour par jour • Zéro graphique inutile • Aide à la décision",
+    btnSecurity: "Sécurité & Appareils",
+    btnCriteria: "Critères",
+    btnRefresh: "Actualiser",
+    btnImportCsv: "Importer Revolut (CSV)",
+    btnAddPosition: "Ajouter un achat",
+    portfolioValueLabel: "VALEUR DU PORTEFEUILLE",
+    investedPrefix: "Investi : ",
+    todayGainLabel: "DYNAMIQUE D'AUJOURD'HUI (VS VEILLE)",
+    totalGainLabel: "GAIN TOTAL (DEPUIS L'ACHAT)",
+    actionSignalsLabel: "SIGNAUX DÉCISIONNELS",
+    signalHold: "Garder",
+    signalProfit: "Sécuriser",
+    signalAlert: "Attention/Couper",
+    positionsCountPrefix: "position",
+    positionsCountSuffix: "suivie",
+    timeframeTitle: "PÉRIODE AFFICHÉE (JOUR PAR JOUR)",
+    timeframe7d: "7 jours",
+    timeframe14d: "2 semaines",
+    timeframe21d: "3 semaines",
+    timeframe30d: "1 mois",
+    sortTitle: "TRIER PAR",
+    sortGainDesc: "Plus gros gains d'abord",
+    sortGainAsc: "Plus faibles gains / pertes",
+    sortTodayDesc: "Meilleure performance du jour",
+    sortTodayAsc: "Plus forte baisse du jour",
+    sortNameAsc: "Nom alphabétique (A-Z)",
+    emptyTitle: "Aucun investissement enregistré",
+    emptyDesc: "Ajoutez votre première action ou crypto achetée sur Revolut pour démarrer le suivi.",
+    emptyAddBtn: "+ Ajouter un achat",
+    invested: "Investi",
+    currentValue: "Valeur Actuelle",
+    totalGain: "Gain Total",
+    today: "Aujourd'hui",
+    yesterday: "Hier",
+    boughtOn: "Acheté le",
+    holdingAgoDays: "il y a {n}j",
+    holdingAgoMonths: "il y a {n} mois",
+    holdingAgoYears: "il y a {n} ans",
+    boughtTodayMarker: "📍 Achat",
+    sharesText: "parts",
+    editBtn: "Modifier",
+    deleteBtn: "Supprimer",
+    confirmDelete: "Supprimer la position {symbol} du portefeuille ?",
+    streakUp: "🔥 {n} jours de hausse d'affilée",
+    streakDown: "❄️ {n} jours de baisse consécutive",
+    dayStripTitle: "Progression jour par jour ({n} derniers jours)",
+    portfolioText: "Portefeuille : ",
+    // Suggestions
+    sugHold: "Garder",
+    sugHoldBullish: "Garder (Hausse {n}j)",
+    sugTakeProfit: "Prendre des bénéfices",
+    sugTargetReached: "Objectif atteint",
+    sugStopLoss: "Stop-Loss / Couper",
+    sugWarningDip: "Alerte baisse ({n}j)",
+    sugOpportunity: "Opportunité / Renforcer",
+    sugPending: "⚠️ Données en attente",
+    sugPendingReason: "Cours en attente de synchronisation. Cliquez sur \"Modifier\" pour ajuster le symbole ou le montant.",
+    // Form & Modals
+    modalAddTitle: "Ajouter un achat Revolut",
+    modalEditTitle: "Modifier {name}",
+    searchLabel: "Recherche (Nom ou Ticker)",
+    searchPlaceholder: "Ex: SpaceX, Apple, Tesla, Bitcoin...",
+    symbolLabel: "Symbole officiel (Ticker)",
+    symbolHint: "Ex: SPCX, AAPL, BTC-USD...",
+    nameLabel: "Nom affiché",
+    nameHint: "Votre titre personnel.",
+    dateLabel: "Date d'achat",
+    timeLabel: "Heure (facultatif)",
+    currencyLabel: "Devise d'achat",
+    investedAmountLabel: "Montant total investi ({cur})",
+    investedAmountPlaceholder: "Ex: 48.82",
+    investedHint: "Ce que vous avez payé sur Revolut.",
+    sharesLabel: "Nombre de parts / actions",
+    sharesPlaceholder: "Ex: 0.36386588",
+    sharesHint: "Fraction exacte avec toutes les décimales.",
+    priceLabel: "Prix d'achat unitaire (estimé)",
+    pricePlaceholder: "Calculé automatiquement",
+    notesLabel: "Note personnelle (facultatif)",
+    notesPlaceholder: "Ex: Achat mensuel DCA, conviction perso...",
+    btnCancel: "Annuler",
+    btnSavePosition: "Enregistrer l'achat",
+    // Settings
+    settingsTitle: "Critères de Recommandation",
+    settingsProfitTarget: "Objectif de prise de bénéfices (Gain global)",
+    settingsStopLoss: "Seuil de Stop-Loss (Perte globale maximale)",
+    settingsDownDays: "Alerte de baisse consécutive",
+    settingsDaysUnit: "jours",
+    settingsSyncBackup: "Sauvegarde et synchronisation",
+    btnExportJson: "Exporter mes positions (JSON)",
+    btnImportJson: "Importer JSON",
+    btnSettingsImportCsv: "📂 Importer CSV Revolut",
+    btnDefaultValues: "Valeurs par défaut",
+    btnSaveSettings: "Enregistrer les critères"
+  },
+  en: {
+    brandBadge: "REVOLUT TRACKER",
+    brandTitle: "Portfolio Tracker",
+    brandSubtitle: "Day-by-day progression • Zero useless charts • Actionable decisions",
+    btnSecurity: "Security & Devices",
+    btnCriteria: "Rules",
+    btnRefresh: "Refresh",
+    btnImportCsv: "Import Revolut (CSV)",
+    btnAddPosition: "Add Purchase",
+    portfolioValueLabel: "PORTFOLIO VALUE",
+    investedPrefix: "Invested: ",
+    todayGainLabel: "TODAY'S CHANGE (VS YESTERDAY)",
+    totalGainLabel: "TOTAL GAIN (SINCE PURCHASE)",
+    actionSignalsLabel: "ACTION SIGNALS",
+    signalHold: "Hold",
+    signalProfit: "Secure",
+    signalAlert: "Warning/Cut",
+    positionsCountPrefix: "position",
+    positionsCountSuffix: "tracked",
+    timeframeTitle: "TIMEFRAME (DAY-BY-DAY STRIP)",
+    timeframe7d: "7 days",
+    timeframe14d: "2 weeks",
+    timeframe21d: "3 weeks",
+    timeframe30d: "1 month",
+    sortTitle: "SORT BY",
+    sortGainDesc: "Highest gain first",
+    sortGainAsc: "Lowest gain / losses first",
+    sortTodayDesc: "Best daily performance",
+    sortTodayAsc: "Worst daily drop",
+    sortNameAsc: "Alphabetical (A-Z)",
+    emptyTitle: "No investments tracked yet",
+    emptyDesc: "Add your first stock or crypto purchased on Revolut to start tracking.",
+    emptyAddBtn: "+ Add purchase",
+    invested: "Invested",
+    currentValue: "Current Value",
+    totalGain: "Total Gain",
+    today: "Today",
+    yesterday: "Yesterday",
+    boughtOn: "Bought on",
+    holdingAgoDays: "{n}d ago",
+    holdingAgoMonths: "{n}mo ago",
+    holdingAgoYears: "{n}y ago",
+    boughtTodayMarker: "📍 Bought",
+    sharesText: "shares",
+    editBtn: "Edit",
+    deleteBtn: "Delete",
+    confirmDelete: "Delete position {symbol} from portfolio?",
+    streakUp: "🔥 {n} consecutive up days",
+    streakDown: "❄️ {n} consecutive down days",
+    dayStripTitle: "Day-by-day progression (last {n} days)",
+    portfolioText: "Portfolio: ",
+    // Suggestions
+    sugHold: "Hold",
+    sugHoldBullish: "Hold ({n}d rally)",
+    sugTakeProfit: "Take Profit",
+    sugTargetReached: "Target Reached",
+    sugStopLoss: "Stop-Loss / Cut",
+    sugWarningDip: "Warning: Drop ({n} days)",
+    sugOpportunity: "Buy the Dip",
+    sugPending: "⚠️ Data Pending",
+    sugPendingReason: "Live quotes pending synchronization. Click \"Edit\" to adjust symbol or amount anytime.",
+    // Form & Modals
+    modalAddTitle: "Add Revolut Purchase",
+    modalEditTitle: "Edit {name}",
+    searchLabel: "Search (Name or Ticker)",
+    searchPlaceholder: "Ex: SpaceX, Apple, Tesla, Bitcoin...",
+    symbolLabel: "Official Symbol (Ticker)",
+    symbolHint: "Ex: SPCX, AAPL, BTC-USD...",
+    nameLabel: "Display Name",
+    nameHint: "Your custom title.",
+    dateLabel: "Purchase Date",
+    timeLabel: "Time (optional)",
+    currencyLabel: "Purchase Currency",
+    investedAmountLabel: "Total Invested Amount ({cur})",
+    investedAmountPlaceholder: "Ex: 48.82",
+    investedHint: "What you paid on Revolut.",
+    sharesLabel: "Number of shares / units",
+    sharesPlaceholder: "Ex: 0.36386588",
+    sharesHint: "Exact fraction with all decimals.",
+    priceLabel: "Estimated Buy Price",
+    pricePlaceholder: "Calculated automatically",
+    notesLabel: "Personal notes (optional)",
+    notesPlaceholder: "Ex: Monthly DCA purchase, conviction...",
+    btnCancel: "Cancel",
+    btnSavePosition: "Save Purchase",
+    // Settings
+    settingsTitle: "Recommendation Rules",
+    settingsProfitTarget: "Profit taking target (Total gain)",
+    settingsStopLoss: "Stop-Loss threshold (Max total loss)",
+    settingsDownDays: "Consecutive down days alert",
+    settingsDaysUnit: "days",
+    settingsSyncBackup: "Backup and synchronization",
+    btnExportJson: "Export positions (JSON)",
+    btnImportJson: "Import JSON",
+    btnSettingsImportCsv: "📂 Import Revolut CSV",
+    btnDefaultValues: "Default Values",
+    btnSaveSettings: "Save Rules"
+  }
+};
+
+function t(key, params = {}) {
+  let text = I18N[currentLang]?.[key] || I18N['fr'][key] || key;
+  for (const [k, v] of Object.entries(params)) {
+    text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+  }
+  return text;
+}
+
 // Formatters
 const eurFormat = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
@@ -94,22 +304,39 @@ const eurFormat = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 2
 });
 
+function formatCurrency(val, currency = 'EUR') {
+  const cur = (currency || 'EUR').toUpperCase();
+  const locale = currentLang === 'en' ? 'en-US' : 'fr-FR';
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: cur,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(val);
+  } catch (e) {
+    return `${val.toFixed(2)} ${cur}`;
+  }
+}
+
 const pctFormat = (val) => {
   const sign = val > 0 ? '+' : '';
   return `${sign}${val.toFixed(2)}%`;
 };
 
-const formatDateFR = (dateStr) => {
+const formatDate = (dateStr) => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  const locale = currentLang === 'en' ? 'en-US' : 'fr-FR';
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const formatDayLabel = (dateStr, indexFromEnd) => {
-  if (indexFromEnd === 0) return "Aujourd'hui";
-  if (indexFromEnd === 1) return "Hier";
+  if (indexFromEnd === 0) return t('today');
+  if (indexFromEnd === 1) return t('yesterday');
   const d = new Date(dateStr);
-  return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const locale = currentLang === 'en' ? 'en-US' : 'fr-FR';
+  return d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
 const getHoldingPeriodText = (dateStr, timeStr) => {
@@ -118,16 +345,123 @@ const getHoldingPeriodText = (dateStr, timeStr) => {
   const buyTimestamp = new Date(dtStr).getTime();
   if (isNaN(buyTimestamp)) return '';
   const diffDays = Math.floor((Date.now() - buyTimestamp) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "aujourd'hui";
-  if (diffDays === 1) return "hier";
-  if (diffDays < 30) return `il y a ${diffDays}j`;
+  if (diffDays === 0) return t('today').toLowerCase();
+  if (diffDays === 1) return t('yesterday').toLowerCase();
+  if (diffDays < 30) return t('holdingAgoDays', { n: diffDays });
   const months = Math.floor(diffDays / 30.4);
-  if (months < 12) return `il y a ${months} mois`;
+  if (months < 12) return t('holdingAgoMonths', { n: months });
   const years = (diffDays / 365.25).toFixed(1);
-  return `il y a ${years} an${parseFloat(years) >= 2 ? 's' : ''}`;
+  return t('holdingAgoYears', { n: years });
 };
 
 // --- HASH HELPER (SHA-256) ---
+
+// --- LANGUAGE SWITCHING & DOM UPDATES ---
+function setLanguage(lang) {
+  currentLang = (lang === "en") ? "en" : "fr";
+  localStorage.setItem("st_lang", currentLang);
+  document.documentElement.lang = currentLang;
+
+  document.querySelectorAll("#langSwitch .lang-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.lang === currentLang);
+  });
+
+  const titleEl = document.querySelector(".brand-title");
+  if (titleEl) titleEl.textContent = t("brandTitle");
+  const subEl = document.querySelector(".brand-subtitle");
+  if (subEl) subEl.textContent = t("brandSubtitle");
+  const secText = document.getElementById("securityBtnText");
+  if (secText) secText.textContent = t("btnSecurity");
+  const setSpan = document.querySelector("#settingsBtn span");
+  if (setSpan) setSpan.textContent = t("btnCriteria");
+  const refSpan = document.querySelector("#refreshBtn span");
+  if (refSpan) refSpan.textContent = t("btnRefresh");
+  const impSpan = document.querySelector("#importCsvBtn span");
+  if (impSpan) impSpan.textContent = t("btnImportCsv");
+  const addSpan = document.querySelector("#addPositionBtn span");
+  if (addSpan) addSpan.textContent = t("btnAddPosition");
+
+  const cardLabels = document.querySelectorAll(".summary-card .card-label");
+  if (cardLabels[0]) cardLabels[0].textContent = t("portfolioValueLabel");
+  if (cardLabels[1]) cardLabels[1].textContent = t("totalGainLabel");
+  if (cardLabels[2]) cardLabels[2].textContent = t("todayGainLabel");
+  if (cardLabels[3]) cardLabels[3].textContent = t("actionSignalsLabel");
+
+  const tfTitle = document.querySelector(".controls-grid .controls-card:first-child .control-title");
+  if (tfTitle) tfTitle.textContent = t("timeframeTitle");
+  const sortTitle = document.querySelector(".controls-grid .controls-card:last-child .control-title");
+  if (sortTitle) sortTitle.textContent = t("sortTitle");
+
+  const pillBtns = document.querySelectorAll("#timeframePills .pill-btn");
+  if (pillBtns[0]) pillBtns[0].textContent = t("timeframe7d");
+  if (pillBtns[1]) pillBtns[1].textContent = t("timeframe14d");
+  if (pillBtns[2]) pillBtns[2].textContent = t("timeframe21d");
+  if (pillBtns[3]) pillBtns[3].textContent = t("timeframe30d");
+
+  const sortSelect = document.getElementById("sortSelect");
+  if (sortSelect) {
+    const opts = sortSelect.options;
+    if (opts[0]) opts[0].textContent = t("sortGainDesc");
+    if (opts[1]) opts[1].textContent = t("sortGainAsc");
+    if (opts[2]) opts[2].textContent = t("sortTodayDesc");
+    if (opts[3]) opts[3].textContent = t("sortTodayAsc");
+    if (opts[4]) opts[4].textContent = t("sortNameAsc");
+  }
+
+  const searchInput = document.getElementById("posSearch");
+  if (searchInput) searchInput.placeholder = t("searchPlaceholder");
+  const searchLbl = document.querySelector("label[for='posSearch']");
+  if (searchLbl) searchLbl.textContent = t("searchLabel");
+  const symLbl = document.querySelector("label[for='posSymbol']");
+  if (symLbl) symLbl.textContent = t("symbolLabel");
+  const nameLbl = document.querySelector("label[for='posName']");
+  if (nameLbl) nameLbl.textContent = t("nameLabel");
+  const dateLbl = document.querySelector("label[for='posBuyDate']");
+  if (dateLbl) dateLbl.textContent = t("dateLabel");
+  const timeLbl = document.querySelector("label[for='posBuyTime']");
+  if (timeLbl) timeLbl.textContent = t("timeLabel");
+  const curLbl = document.querySelector("label[for='posCurrency']");
+  if (curLbl) curLbl.textContent = t("currencyLabel");
+  const shLbl = document.querySelector("label[for='posShares']");
+  if (shLbl) shLbl.textContent = t("sharesLabel");
+  const prLbl = document.querySelector("label[for='posBuyPrice']");
+  if (prLbl) prLbl.textContent = t("priceLabel");
+  const notesLbl = document.querySelector("label[for='posNotes']");
+  if (notesLbl) notesLbl.textContent = t("notesLabel");
+  const cancelBtn = document.getElementById("modalCancelBtn");
+  if (cancelBtn) cancelBtn.textContent = t("btnCancel");
+  const saveBtn = document.getElementById("modalSaveBtn");
+  if (saveBtn) saveBtn.textContent = t("btnSavePosition");
+
+  const setH2 = document.querySelector("#settingsModal .modal-header h2");
+  if (setH2) setH2.textContent = t("settingsTitle");
+  const setReset = document.getElementById("settingsResetBtn");
+  if (setReset) setReset.textContent = t("btnDefaultValues");
+  const setSave = document.getElementById("settingsSaveBtn");
+  if (setSave) setSave.textContent = t("btnSaveSettings");
+  const setExp = document.getElementById("exportDataBtn");
+  if (setExp) setExp.textContent = t("btnExportJson");
+  const setImp = document.getElementById("importDataBtn");
+  if (setImp) setImp.textContent = t("btnImportJson");
+  const setImpCsv = document.getElementById("settingsImportCsvBtn");
+  if (setImpCsv) setImpCsv.textContent = t("btnSettingsImportCsv");
+
+  updateCurrencyLabels();
+  if (portfolio) {
+    renderSummary();
+    renderPositions();
+  }
+}
+
+function updateCurrencyLabels() {
+  const cur = (document.getElementById("posCurrency")?.value || "EUR").toUpperCase();
+  const label = document.getElementById("investedAmountLabel");
+  if (label) {
+    const symbol = cur === "USD" ? "$ USD" : (cur === "GBP" ? "£ GBP" : "€ EUR");
+    label.textContent = t("investedAmountLabel", { cur: symbol });
+  }
+}
+
 async function sha256(str) {
   const buf = new TextEncoder().encode(str + "_salt_st_2026");
   const hashBuf = await crypto.subtle.digest('SHA-256', buf);
@@ -185,6 +519,12 @@ function getAbortSignal(ms) {
 // --- INITIALIZATION ---
 function startApp() {
   try {
+    setLanguage(currentLang);
+  } catch (e) {
+    console.error("setLanguage error:", e);
+  }
+
+  try {
     initTheme();
   } catch (e) {
     console.error('initTheme error:', e);
@@ -234,7 +574,22 @@ async function initApp() {
 
 // Setup Events
 function setupEventListeners() {
-  document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+  const langSwitch = document.getElementById("langSwitch");
+  if (langSwitch) {
+    langSwitch.addEventListener("click", (e) => {
+      const btn = e.target.closest(".lang-btn");
+      if (!btn) return;
+      const lang = btn.dataset.lang;
+      if (lang) setLanguage(lang);
+    });
+  }
+
+  const currencySelect = document.getElementById("posCurrency");
+  if (currencySelect) {
+    currencySelect.addEventListener("change", updateCurrencyLabels);
+  }
+
+  document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
 
   document.getElementById('refreshBtn').addEventListener('click', () => {
     clientCache.quotes.clear();
@@ -807,63 +1162,77 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
 
   if (totalGainPercent <= stopLoss) {
     return {
-      action: 'SELL_STOP_LOSS',
-      label: 'Stop-Loss / Couper',
-      badgeClass: 'badge-danger',
-      reason: `Perte globale de ${totalGainPercent.toFixed(1)}% (seuil stop-loss: ${stopLoss}%). Envisagez de couper la position pour limiter les pertes.`
+      action: "SELL_STOP_LOSS",
+      label: t("sugStopLoss"),
+      badgeClass: "badge-danger",
+      reason: currentLang === "en"
+        ? `Total loss of ${totalGainPercent.toFixed(1)}% (stop-loss threshold: ${stopLoss}%). Consider cutting position to protect capital.`
+        : `Perte globale de ${totalGainPercent.toFixed(1)}% (seuil stop-loss: ${stopLoss}%). Envisagez de couper la position pour limiter les pertes.`
     };
   }
 
   if (totalGainPercent >= targetProfit) {
     if (consecutiveDown >= 1 || todayChangePercent < -1.0) {
       return {
-        action: 'TAKE_PROFIT',
-        label: 'Prendre des bénéfices',
-        badgeClass: 'badge-warning',
-        reason: `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}% vs cible +${targetProfit}%) et repli récent. Excellent timing pour sécuriser tout ou partie des gains.`
+        action: "TAKE_PROFIT",
+        label: t("sugTakeProfit"),
+        badgeClass: "badge-warning",
+        reason: currentLang === "en"
+          ? `Profit target met (+${totalGainPercent.toFixed(1)}% vs target +${targetProfit}%) with recent pullback. Ideal timing to secure profits.`
+          : `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}% vs cible +${targetProfit}%) et repli récent. Excellent timing pour sécuriser tout ou partie des gains.`
       };
     } else {
       return {
-        action: 'TARGET_REACHED',
-        label: 'Objectif atteint',
-        badgeClass: 'badge-gold',
-        reason: `Superbe performance (+${totalGainPercent.toFixed(1)}%). Objectif (+${targetProfit}%) dépassé. Préparez-vous à sécuriser au premier essoufflement.`
+        action: "TARGET_REACHED",
+        label: t("sugTargetReached"),
+        badgeClass: "badge-gold",
+        reason: currentLang === "en"
+          ? `Outstanding performance (+${totalGainPercent.toFixed(1)}%). Target (+${targetProfit}%) exceeded. Prepare to secure on first signs of exhaustion.`
+          : `Superbe performance (+${totalGainPercent.toFixed(1)}%). Objectif (+${targetProfit}%) dépassé. Préparez-vous à sécuriser au premier essoufflement.`
       };
     }
   }
 
   if (consecutiveDown >= downAlertDays) {
     return {
-      action: 'WATCH_DOWNTREND',
-      label: `Alerte baisse (${consecutiveDown}j)`,
-      badgeClass: 'badge-orange',
-      reason: `${consecutiveDown} séances consécutives de baisse. Vos gains s'effritent de jour en jour : surveillez attentivement.`
+      action: "WATCH_DOWNTREND",
+      label: t("sugWarningDip", { n: consecutiveDown }),
+      badgeClass: "badge-orange",
+      reason: currentLang === "en"
+        ? `${consecutiveDown} consecutive down days. Gains are fading day by day: watch closely.`
+        : `${consecutiveDown} séances consécutives de baisse. Vos gains s'effritent de jour en jour : surveillez attentivement.`
     };
   }
 
   if (totalGainPercent > 3 && consecutiveDown >= 2 && todayChangePercent < -2.0) {
     return {
-      action: 'BUY_DIP',
-      label: 'Opportunité / Renforcer',
-      badgeClass: 'badge-blue',
-      reason: `Position globalement haussière (+${totalGainPercent.toFixed(1)}%) subissant un repli court terme. Opportunité potentielle de renfort à moindre coût.`
+      action: "BUY_DIP",
+      label: t("sugOpportunity"),
+      badgeClass: "badge-blue",
+      reason: currentLang === "en"
+        ? `Upward trending position (+${totalGainPercent.toFixed(1)}%) undergoing short-term dip. Potential opportunity to add at a discount.`
+        : `Position globalement haussière (+${totalGainPercent.toFixed(1)}%) subissant un repli court terme. Opportunité potentielle de renfort à moindre coût.`
     };
   }
 
   if (consecutiveUp >= 2) {
     return {
-      action: 'HOLD_BULLISH',
-      label: `Garder (Hausse ${consecutiveUp}j)`,
-      badgeClass: 'badge-success',
-      reason: `Excellente dynamique : ${consecutiveUp} jours d'affilée dans le vert. Conservez la position.`
+      action: "HOLD_BULLISH",
+      label: t("sugHoldBullish", { n: consecutiveUp }),
+      badgeClass: "badge-success",
+      reason: currentLang === "en"
+        ? `Strong momentum: ${consecutiveUp} consecutive days in the green. Hold your position.`
+        : `Excellente dynamique : ${consecutiveUp} jours d'affilée dans le vert. Conservez la position.`
     };
   }
 
   return {
-    action: 'HOLD',
-    label: 'Garder',
-    badgeClass: 'badge-neutral',
-    reason: `Tendance neutre ou stable. Aucune alerte déclenchée, conservez la position.`
+    action: "HOLD",
+    label: t("sugHold"),
+    badgeClass: "badge-neutral",
+    reason: currentLang === "en"
+      ? `Neutral or stable trend. No risk alerts triggered, hold position.`
+      : `Tendance neutre ou stable. Aucune alerte déclenchée, conservez la position.`
   };
 }
 
@@ -881,16 +1250,22 @@ async function buildPortfolioData() {
     try {
       const shares = parseFloat(pos.shares) || 0;
       const buyPrice = parseFloat(pos.buyPrice) || 0;
+      const posCurrency = (pos.currency || "EUR").toUpperCase();
       const chart = await fetchClientChart(pos.symbol, buyPrice);
-      const toEurRate = await getClientRateToEUR(chart.currency);
-      const investedEur = parseFloat(pos.investedAmount) || (shares * buyPrice * toEurRate);
+      const chartCurrency = (chart.currency || posCurrency).toUpperCase();
 
-      const currentPrice = chart.currentPrice;
-      const currentPriceEur = currentPrice * toEurRate;
-      const currentValueEur = shares * currentPriceEur;
+      const posToEurRate = await getClientRateToEUR(posCurrency);
+      const chartToEurRate = await getClientRateToEUR(chartCurrency);
 
-      const totalGainEur = currentValueEur - investedEur;
-      const totalGainPercent = investedEur > 0 ? (totalGainEur / investedEur) * 100 : 0;
+      let currentPriceInPosCurrency = chart.currentPrice;
+      if (chartCurrency !== posCurrency && posToEurRate > 0) {
+        currentPriceInPosCurrency = (chart.currentPrice * chartToEurRate) / posToEurRate;
+      }
+
+      const investedNative = parseFloat(pos.investedAmount) || (shares * buyPrice);
+      const currentValueNative = shares * currentPriceInPosCurrency;
+      const totalGainNative = currentValueNative - investedNative;
+      const totalGainPercent = investedNative > 0 ? (totalGainNative / investedNative) * 100 : 0;
 
       const fullHistory = chart.history || [];
       const daysCount = Math.min(fullHistory.length, 30);
@@ -901,29 +1276,33 @@ async function buildPortfolioData() {
         const day = recentHistory[i];
         const prevDay = i > 0 ? recentHistory[i - 1] : null;
 
-        const dayClose = day.close;
-        const prevClose = prevDay ? prevDay.close : dayClose;
-        const changeVal = dayClose - prevClose;
-        const changePct = prevClose > 0 ? (changeVal / prevClose) * 100 : 0;
+        let dayCloseInPos = day.close;
+        let prevCloseInPos = prevDay ? prevDay.close : dayCloseInPos;
+        if (chartCurrency !== posCurrency && posToEurRate > 0) {
+          dayCloseInPos = (day.close * chartToEurRate) / posToEurRate;
+          prevCloseInPos = (prevCloseInPos * chartToEurRate) / posToEurRate;
+        }
 
-        let trend = 'flat';
-        if (changeVal > 0.005) trend = 'up';
-        else if (changeVal < -0.005) trend = 'down';
+        const changeVal = dayCloseInPos - prevCloseInPos;
+        const changePct = prevCloseInPos > 0 ? (changeVal / prevCloseInPos) * 100 : 0;
 
-        const dayValueEur = shares * dayClose * toEurRate;
-        const dayGainFromBuyEur = dayValueEur - investedEur;
-        const dayGainFromBuyPct = investedEur > 0 ? (dayGainFromBuyEur / investedEur) * 100 : 0;
+        let trend = "flat";
+        if (changeVal > 0.005) trend = "up";
+        else if (changeVal < -0.005) trend = "down";
+
+        const dayValueNative = shares * dayCloseInPos;
+        const dayGainFromBuy = dayValueNative - investedNative;
+        const dayGainFromBuyPct = investedNative > 0 ? (dayGainFromBuy / investedNative) * 100 : 0;
 
         dailyBreakdown.push({
           dateStr: day.dateStr,
           timestamp: day.timestamp,
-          close: dayClose,
-          closeEur: dayClose * toEurRate,
+          close: dayCloseInPos,
           changeVal,
           changePct,
           trend,
-          dayValueEur,
-          dayGainFromBuyEur,
+          dayValue: dayValueNative,
+          dayGainFromBuy,
           dayGainFromBuyPct
         });
       }
@@ -933,19 +1312,19 @@ async function buildPortfolioData() {
       for (let i = dailyBreakdown.length - 1; i >= 1; i--) {
         const trend = dailyBreakdown[i].trend;
         if (i === dailyBreakdown.length - 1) {
-          if (trend === 'up') consecutiveUp++;
-          else if (trend === 'down') consecutiveDown++;
+          if (trend === "up") consecutiveUp++;
+          else if (trend === "down") consecutiveDown++;
           else break;
         } else {
-          if (consecutiveUp > 0 && trend === 'up') consecutiveUp++;
-          else if (consecutiveDown > 0 && trend === 'down') consecutiveDown++;
+          if (consecutiveUp > 0 && trend === "up") consecutiveUp++;
+          else if (consecutiveDown > 0 && trend === "down") consecutiveDown++;
           else break;
         }
       }
 
       const lastDay = dailyBreakdown[dailyBreakdown.length - 1] || {};
       const todayChangePercent = lastDay.changePct || 0;
-      const todayChangeEur = (lastDay.changeVal || 0) * shares * toEurRate;
+      const todayChangeNative = (lastDay.changeVal || 0) * shares;
 
       const suggestion = evaluateSuggestionClient(
         totalGainPercent,
@@ -954,6 +1333,10 @@ async function buildPortfolioData() {
         consecutiveDown,
         settings
       );
+
+      const investedEur = investedNative * posToEurRate;
+      const currentValueEur = currentValueNative * posToEurRate;
+      const todayChangeEur = todayChangeNative * posToEurRate;
 
       totalInvestedEur += investedEur;
       totalCurrentValueEur += currentValueEur;
@@ -964,52 +1347,64 @@ async function buildPortfolioData() {
         symbol: pos.symbol,
         name: pos.name || chart.shortName,
         buyDate: pos.buyDate,
-        buyTime: pos.buyTime || '',
+        buyTime: pos.buyTime || "",
         buyPrice: buyPrice,
         shares: shares,
-        investedEur: investedEur,
-        currency: chart.currency,
-        currentPrice: currentPrice,
-        currentPriceEur: currentPriceEur,
-        currentValueEur: currentValueEur,
-        totalGainEur: totalGainEur,
-        totalGainPercent: totalGainPercent,
-        todayChangePercent: todayChangePercent,
-        todayChangeEur: todayChangeEur,
+        currency: posCurrency,
+        investedNative,
+        investedEur,
+        currentPrice: currentPriceInPosCurrency,
+        currentValueNative,
+        currentValueEur,
+        totalGainNative,
+        totalGainEur,
+        totalGainPercent,
+        todayChangePercent,
+        todayChangeNative,
+        todayChangeEur,
         consecutiveUp,
         consecutiveDown,
         suggestion,
         dailyBreakdown,
-        notes: pos.notes || ''
+        notes: pos.notes || ""
       };
     } catch (err) {
       console.warn(`Erreur calcul pour ${pos.symbol}:`, err.message);
+      const posCurrency = (pos.currency || "EUR").toUpperCase();
+      const investedNative = parseFloat(pos.investedAmount) || 0;
+      const posToEur = posCurrency === "USD" ? 0.92 : (posCurrency === "GBP" ? 1.18 : 1.0);
+      const investedEur = investedNative * posToEur;
+
       return {
         id: pos.id,
         symbol: pos.symbol,
         name: pos.name || pos.symbol,
         buyDate: pos.buyDate,
-        buyTime: pos.buyTime || '',
+        buyTime: pos.buyTime || "",
         buyPrice: pos.buyPrice,
         shares: pos.shares,
-        investedEur: pos.investedAmount || 0,
-        currency: pos.currency || 'EUR',
+        currency: posCurrency,
+        investedNative,
+        investedEur,
         currentPrice: pos.buyPrice,
-        currentValueEur: pos.investedAmount || 0,
+        currentValueNative: investedNative,
+        currentValueEur: investedEur,
+        totalGainNative: 0,
         totalGainEur: 0,
         totalGainPercent: 0,
         todayChangePercent: 0,
+        todayChangeNative: 0,
         todayChangeEur: 0,
         consecutiveUp: 0,
         consecutiveDown: 0,
         suggestion: {
-          action: 'WARNING',
-          label: '⚠️ Données en attente',
-          badgeClass: 'badge-warning',
-          reason: 'Cours en attente de synchronisation. Cliquez sur "Modifier" pour ajuster le symbole ou le montant à tout moment.'
+          action: "WARNING",
+          label: t("sugPending"),
+          badgeClass: "badge-warning",
+          reason: t("sugPendingReason")
         },
         dailyBreakdown: [],
-        notes: pos.notes || ''
+        notes: pos.notes || ""
       };
     }
   }));
@@ -1045,7 +1440,11 @@ function renderInstantPositions(local) {
   const enriched = positions.map(pos => {
     const shares = parseFloat(pos.shares) || 0;
     const buyPrice = parseFloat(pos.buyPrice) || 0;
-    const investedEur = parseFloat(pos.investedAmount) || (shares * buyPrice);
+    const posCurrency = (pos.currency || "EUR").toUpperCase();
+    const investedNative = parseFloat(pos.investedAmount) || (shares * buyPrice);
+    const posToEur = posCurrency === "USD" ? 0.92 : (posCurrency === "GBP" ? 1.18 : 1.0);
+    const investedEur = investedNative * posToEur;
+
     totalInvestedEur += investedEur;
     totalCurrentValueEur += investedEur;
 
@@ -1054,28 +1453,31 @@ function renderInstantPositions(local) {
       symbol: pos.symbol,
       name: pos.name || pos.symbol,
       buyDate: pos.buyDate,
-      buyTime: pos.buyTime || '',
+      buyTime: pos.buyTime || "",
       buyPrice: buyPrice,
       shares: shares,
-      investedEur: investedEur,
-      currency: pos.currency || 'EUR',
+      currency: posCurrency,
+      investedNative,
+      investedEur,
       currentPrice: buyPrice,
-      currentPriceEur: buyPrice,
+      currentValueNative: investedNative,
       currentValueEur: investedEur,
+      totalGainNative: 0,
       totalGainEur: 0,
       totalGainPercent: 0,
       todayChangePercent: 0,
+      todayChangeNative: 0,
       todayChangeEur: 0,
       consecutiveUp: 0,
       consecutiveDown: 0,
       suggestion: {
-        action: 'HOLD',
-        label: 'Synchronisation...',
-        badgeClass: 'badge-neutral',
-        reason: 'Actualisation des cours en cours...'
+        action: "HOLD",
+        label: t("sugHold"),
+        badgeClass: "badge-neutral",
+        reason: currentLang === "en" ? "Updating live prices..." : "Actualisation des cours en cours..."
       },
       dailyBreakdown: [],
-      notes: pos.notes || ''
+      notes: pos.notes || ""
     };
   });
 
@@ -1101,7 +1503,6 @@ function renderInstantPositions(local) {
 // --- LOAD PORTFOLIO ---
 async function loadPortfolio(forceRefresh = false) {
   const local = getLocalData();
-  // Immediately render local data in 0ms so the screen is never blocked
   if (!portfolio) {
     renderInstantPositions(local);
   }
@@ -1111,7 +1512,7 @@ async function loadPortfolio(forceRefresh = false) {
     renderSummary();
     renderPositions();
   } catch (err) {
-    console.warn('Erreur synchronisation portfolio:', err);
+    console.warn("Erreur synchronisation portfolio:", err);
     if (!portfolio) {
       renderInstantPositions(local);
     }
@@ -1123,34 +1524,34 @@ function renderSummary() {
   if (!portfolio || !portfolio.summary) return;
   const s = portfolio.summary;
 
-  totalCurrentValueEl.textContent = eurFormat.format(s.totalCurrentValueEur).replace('€', '').trim();
-  totalInvestedTextEl.textContent = `Investi : ${eurFormat.format(s.totalInvestedEur)}`;
+  totalCurrentValueEl.textContent = eurFormat.format(s.totalCurrentValueEur).replace("€", "").trim();
+  totalInvestedTextEl.textContent = `${t("investedPrefix")}${eurFormat.format(s.totalInvestedEur)}`;
 
-  const signTotal = s.totalGainEur >= 0 ? '+' : '';
+  const signTotal = s.totalGainEur >= 0 ? "+" : "";
   totalGainEurEl.textContent = `${signTotal}${eurFormat.format(s.totalGainEur)}`;
   totalGainPctBadgeEl.textContent = pctFormat(s.totalGainPercent);
-  totalGainPctBadgeEl.className = `pill-badge ${s.totalGainEur >= 0 ? 'up' : 'down'}`;
+  totalGainPctBadgeEl.className = `pill-badge ${s.totalGainEur >= 0 ? "up" : "down"}`;
 
-  const signDay = s.totalDayGainEur >= 0 ? '+' : '';
+  const signDay = s.totalDayGainEur >= 0 ? "+" : "";
   totalDayGainEurEl.textContent = `${signDay}${eurFormat.format(s.totalDayGainEur)}`;
   totalDayGainPctBadgeEl.textContent = pctFormat(s.totalDayGainPercent);
-  totalDayGainPctBadgeEl.className = `pill-badge ${s.totalDayGainEur >= 0 ? 'up' : 'down'}`;
+  totalDayGainPctBadgeEl.className = `pill-badge ${s.totalDayGainEur >= 0 ? "up" : "down"}`;
 
   const counts = { hold: 0, profit: 0, alert: 0 };
   portfolio.positions.forEach(p => {
     const action = p.suggestion?.action;
-    if (action === 'HOLD' || action === 'HOLD_BULLISH') counts.hold++;
-    else if (action === 'TAKE_PROFIT' || action === 'TARGET_REACHED') counts.profit++;
+    if (action === "HOLD" || action === "HOLD_BULLISH") counts.hold++;
+    else if (action === "TAKE_PROFIT" || action === "TARGET_REACHED") counts.profit++;
     else counts.alert++;
   });
 
   signalsSummaryEl.innerHTML = `
-    <span class="signal-item signal-hold">${counts.hold} Garder</span>
-    <span class="signal-item signal-profit">${counts.profit} Sécuriser</span>
-    <span class="signal-item signal-alert">${counts.alert} Attention/Couper</span>
+    <span class="signal-item signal-hold">${counts.hold} ${t("signalHold")}</span>
+    <span class="signal-item signal-profit">${counts.profit} ${t("signalProfit")}</span>
+    <span class="signal-item signal-alert">${counts.alert} ${t("signalAlert")}</span>
   `;
 
-  positionsCountTextEl.textContent = `${s.positionsCount} position${s.positionsCount > 1 ? 's' : ''} suivie${s.positionsCount > 1 ? 's' : ''}`;
+  positionsCountTextEl.textContent = `${s.positionsCount} ${t("positionsCountPrefix")}${s.positionsCount > 1 ? "s" : ""} ${t("positionsCountSuffix")}${currentLang === "fr" && s.positionsCount > 1 ? "s" : ""}`;
 }
 
 function renderPositions() {
@@ -1159,20 +1560,20 @@ function renderPositions() {
   if (portfolio.positions.length === 0) {
     positionsContainer.innerHTML = `
       <div class="empty-state">
-        <h3 style="margin-bottom: 8px; color: var(--text-main);">Aucun investissement enregistré</h3>
-        <p>Ajoutez votre première action ou crypto achetée sur Revolut pour démarrer le suivi.</p>
-        <button class="btn btn-primary" onclick="openPositionModal()" style="margin-top: 16px;">+ Ajouter un achat</button>
+        <h3 style="margin-bottom: 8px; color: var(--text-main);">${t("emptyTitle")}</h3>
+        <p>${t("emptyDesc")}</p>
+        <button class="btn btn-primary" onclick="openPositionModal()" style="margin-top: 16px;">${t("emptyAddBtn")}</button>
       </div>
     `;
     return;
   }
 
   const sorted = [...portfolio.positions].sort((a, b) => {
-    if (currentSort === 'gain_desc') return b.totalGainPercent - a.totalGainPercent;
-    if (currentSort === 'gain_asc') return a.totalGainPercent - b.totalGainPercent;
-    if (currentSort === 'today_desc') return b.todayChangePercent - a.todayChangePercent;
-    if (currentSort === 'today_asc') return a.todayChangePercent - b.todayChangePercent;
-    if (currentSort === 'name_asc') return a.name.localeCompare(b.name);
+    if (currentSort === "gain_desc") return b.totalGainPercent - a.totalGainPercent;
+    if (currentSort === "gain_asc") return a.totalGainPercent - b.totalGainPercent;
+    if (currentSort === "today_desc") return b.todayChangePercent - a.todayChangePercent;
+    if (currentSort === "today_asc") return a.todayChangePercent - b.todayChangePercent;
+    if (currentSort === "name_asc") return a.name.localeCompare(b.name);
     return 0;
   });
 
@@ -1184,41 +1585,47 @@ function renderPositions() {
     const slicedHistory = history.slice(Math.max(0, history.length - currentDays));
     const reversedHistory = [...slicedHistory].reverse();
 
-    let streakHtml = '';
+    let streakHtml = "";
     if (pos.consecutiveUp >= 2) {
-      streakHtml = `<span class="streak-tag streak-up">🔥 ${pos.consecutiveUp} jours de hausse d'affilée</span>`;
+      streakHtml = `<span class="streak-tag streak-up">${t("streakUp", { n: pos.consecutiveUp })}</span>`;
     } else if (pos.consecutiveDown >= 2) {
-      streakHtml = `<span class="streak-tag streak-down">❄️ ${pos.consecutiveDown} jours de baisse consécutive</span>`;
+      streakHtml = `<span class="streak-tag streak-down">${t("streakDown", { n: pos.consecutiveDown })}</span>`;
     }
 
     const daysHtml = reversedHistory.map((day, idx) => {
       const isUp = day.changePct > 0.005;
       const isDown = day.changePct < -0.005;
-      const trendClass = isUp ? 'trend-up' : (isDown ? 'trend-down' : 'trend-flat');
-      const changeClass = isUp ? 'up' : (isDown ? 'down' : 'flat');
-      const arrow = isUp ? '▲' : (isDown ? '▼' : '—');
+      const trendClass = isUp ? "trend-up" : (isDown ? "trend-down" : "trend-flat");
+      const changeClass = isUp ? "up" : (isDown ? "down" : "flat");
+      const arrow = isUp ? "▲" : (isDown ? "▼" : "—");
       const dayLabel = formatDayLabel(day.dateStr, idx);
       const isBuyDay = day.dateStr === pos.buyDate;
       const buyMarkerHtml = isBuyDay
-        ? `<span class="buy-marker-tag" style="display:inline-block; font-size:10px; font-weight:700; color:var(--color-up); background:rgba(16,185,129,0.18); padding:1px 5px; border-radius:4px; margin-top:3px;">📍 Achat</span>`
-        : '';
+        ? `<span class="buy-marker-tag" style="display:inline-block; font-size:10px; font-weight:700; color:var(--color-up); background:rgba(16,185,129,0.18); padding:1px 5px; border-radius:4px; margin-top:3px;">${t("boughtTodayMarker")}</span>`
+        : "";
 
       return `
         <div class="day-cell ${trendClass}">
           <span class="day-cell-date">${dayLabel}</span>
-          <span class="day-cell-close">${eurFormat.format(day.closeEur)}</span>
+          <span class="day-cell-close">${formatCurrency(day.close, pos.currency)}</span>
           <span class="day-cell-change ${changeClass}">
             ${arrow} ${pctFormat(day.changePct)}
           </span>
-          <span class="day-cell-val">Portefeuille: ${eurFormat.format(day.dayValueEur)}</span>
+          <span class="day-cell-val">${t("portfolioText")}${formatCurrency(day.dayValue, pos.currency)}</span>
           ${buyMarkerHtml}
         </div>
       `;
-    }).join('');
+    }).join("");
 
     const holdingText = getHoldingPeriodText(pos.buyDate, pos.buyTime);
-    const timeText = pos.buyTime ? ` à ${escapeHtml(pos.buyTime)}` : '';
-    const holdingBadge = holdingText ? ` (${holdingText})` : '';
+    const timeText = pos.buyTime ? ` ${currentLang === "en" ? "at" : "à"} ${escapeHtml(pos.buyTime)}` : "";
+    const holdingBadge = holdingText ? ` (${holdingText})` : "";
+
+    const investedFormatted = formatCurrency(pos.investedNative, pos.currency);
+    const currentValFormatted = formatCurrency(pos.currentValueNative, pos.currency);
+    const gainFormatted = `${pos.totalGainNative >= 0 ? "+" : ""}${formatCurrency(pos.totalGainNative, pos.currency)}`;
+    const convertedInvested = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.investedEur)})</span>` : "";
+    const convertedCurrent = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.currentValueEur)})</span>` : "";
 
     return `
       <article class="pos-card" data-id="${pos.id}">
@@ -1227,23 +1634,25 @@ function renderPositions() {
             <span class="pos-symbol-pill">${escapeHtml(pos.symbol)}</span>
             <div>
               <h3 class="pos-name">${escapeHtml(pos.name)}</h3>
-              <p class="pos-meta">Acheté le ${formatDateFR(pos.buyDate)}${timeText}${holdingBadge} • ${pos.shares} parts @ ${pos.buyPrice.toFixed(2)} ${pos.currency}</p>
+              <p class="pos-meta">${t("boughtOn")} ${formatDate(pos.buyDate)}${timeText}${holdingBadge} • ${pos.shares} ${t("sharesText")} @ ${formatCurrency(pos.buyPrice, pos.currency)}</p>
             </div>
           </div>
 
           <div class="pos-metrics-group">
             <div class="pos-metric-box">
-              <span class="metric-label">Investi</span>
-              <span class="metric-value">${eurFormat.format(pos.investedEur)}</span>
+              <span class="metric-label">${t("invested")}</span>
+              <span class="metric-value">${investedFormatted}</span>
+              ${convertedInvested}
             </div>
             <div class="pos-metric-box">
-              <span class="metric-label">Valeur Actuelle</span>
-              <span class="metric-value">${eurFormat.format(pos.currentValueEur)}</span>
+              <span class="metric-label">${t("currentValue")}</span>
+              <span class="metric-value">${currentValFormatted}</span>
+              ${convertedCurrent}
             </div>
             <div class="pos-metric-box">
-              <span class="metric-label">Gain Total</span>
-              <span class="pill-badge ${pos.totalGainEur >= 0 ? 'up' : 'down'}">
-                ${pos.totalGainEur >= 0 ? '+' : ''}${eurFormat.format(pos.totalGainEur)} (${pctFormat(pos.totalGainPercent)})
+              <span class="metric-label">${t("totalGain")}</span>
+              <span class="pill-badge ${pos.totalGainPercent >= 0 ? "up" : "down"}">
+                ${gainFormatted} (${pctFormat(pos.totalGainPercent)})
               </span>
             </div>
           </div>
@@ -1251,16 +1660,16 @@ function renderPositions() {
 
         <div class="suggestion-banner ${bannerClass}">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <span class="suggestion-badge ${sug.badgeClass || 'badge-neutral'}">
-              ${escapeHtml(sug.label || 'GARDER')}
+            <span class="suggestion-badge ${sug.badgeClass || "badge-neutral"}">
+              ${escapeHtml(sug.label || t("sugHold"))}
             </span>
-            <span class="suggestion-reason">${escapeHtml(sug.reason || '')}</span>
+            <span class="suggestion-reason">${escapeHtml(sug.reason || "")}</span>
           </div>
         </div>
 
         <div class="day-strip-wrapper">
           <div class="strip-header">
-            <span class="strip-title">Progression jour par jour (${currentDays} derniers jours)</span>
+            <span class="strip-title">${t("dayStripTitle", { n: currentDays })}</span>
             ${streakHtml}
           </div>
           <div class="day-strip">
@@ -1269,15 +1678,15 @@ function renderPositions() {
         </div>
 
         <div class="pos-footer">
-          <span>${pos.notes ? `📝 <em>${escapeHtml(pos.notes)}</em>` : 'Aucune note'}</span>
+          <span>${pos.notes ? `📝 <em>${escapeHtml(pos.notes)}</em>` : (currentLang === "en" ? "No notes" : "Aucune note")}</span>
           <div class="pos-actions">
-            <button class="btn btn-secondary" onclick="editPosition('${pos.id}')" style="font-size: 11px; padding: 4px 10px;">Modifier</button>
-            <button class="btn-ghost-danger" onclick="deletePosition('${pos.id}', '${pos.symbol}')">Supprimer</button>
+            <button class="btn btn-secondary" onclick="editPosition('${pos.id}')" style="font-size: 11px; padding: 4px 10px;">${t("editBtn")}</button>
+            <button class="btn-ghost-danger" onclick="deletePosition('${pos.id}', '${pos.symbol}')">${t("deleteBtn")}</button>
           </div>
         </div>
       </article>
     `;
-  }).join('');
+  }).join("");
 }
 
 function getBannerClass(action) {
@@ -1357,10 +1766,12 @@ window.selectStock = function(symbol, name) {
 window.openPositionModal = function() {
   positionForm.reset();
   document.getElementById('posId').value = '';
-  document.getElementById('modalTitle').textContent = 'Ajouter un achat Revolut';
+  document.getElementById('modalTitle').textContent = t('modalAddTitle');
   document.getElementById('posBuyDate').value = new Date().toISOString().split('T')[0];
   const timeEl = document.getElementById('posBuyTime');
   if (timeEl) timeEl.value = '';
+  document.getElementById('posCurrency').value = 'EUR';
+  updateCurrencyLabels();
   autocompleteDropdown.style.display = 'none';
   positionModal.classList.add('active');
 };
@@ -1371,7 +1782,7 @@ window.editPosition = function(id) {
   if (!pos) return;
 
   document.getElementById('posId').value = pos.id;
-  document.getElementById('modalTitle').textContent = `Modifier ${pos.name || pos.symbol}`;
+  document.getElementById('modalTitle').textContent = t('modalEditTitle', { name: pos.name || pos.symbol });
   document.getElementById('posSearch').value = pos.name || pos.symbol;
   document.getElementById('posSymbol').value = pos.symbol || '';
   document.getElementById('posName').value = pos.name || '';
@@ -1383,6 +1794,7 @@ window.editPosition = function(id) {
   document.getElementById('posShares').value = pos.shares || '';
   document.getElementById('posBuyPrice').value = pos.buyPrice || '';
   document.getElementById('posNotes').value = pos.notes || '';
+  updateCurrencyLabels();
 
   autocompleteDropdown.style.display = 'none';
   positionModal.classList.add('active');
@@ -1454,7 +1866,7 @@ async function handleFormSubmit(e) {
 
 // Delete Position
 window.deletePosition = async function(id, symbol) {
-  if (!confirm(`Supprimer la position ${symbol} du portefeuille ?`)) return;
+  if (!confirm(t('confirmDelete', { symbol }))) return;
 
   const local = getLocalData();
   local.positions = (local.positions || []).filter(p => p.id !== id);

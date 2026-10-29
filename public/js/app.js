@@ -913,10 +913,10 @@ async function buildPortfolioData() {
         consecutiveUp: 0,
         consecutiveDown: 0,
         suggestion: {
-          action: 'HOLD',
-          label: 'Garder',
-          badgeClass: 'badge-neutral',
-          reason: 'Données en cours de synchronisation.'
+          action: 'WARNING',
+          label: '⚠️ Données en attente',
+          badgeClass: 'badge-warning',
+          reason: 'Cours en attente de synchronisation. Cliquez sur "Modifier" pour ajuster le symbole ou le montant à tout moment.'
         },
         dailyBreakdown: [],
         notes: pos.notes || ''
@@ -1113,6 +1113,7 @@ function renderPositions() {
         <div class="pos-footer">
           <span>${pos.notes ? `📝 <em>${escapeHtml(pos.notes)}</em>` : 'Aucune note'}</span>
           <div class="pos-actions">
+            <button class="btn btn-secondary" onclick="editPosition('${pos.id}')" style="font-size: 11px; padding: 4px 10px;">Modifier</button>
             <button class="btn-ghost-danger" onclick="deletePosition('${pos.id}', '${pos.symbol}')">Supprimer</button>
           </div>
         </div>
@@ -1202,54 +1203,59 @@ window.openPositionModal = function() {
   positionModal.classList.add('active');
 };
 
+window.editPosition = function(id) {
+  const local = getLocalData();
+  const pos = (local.positions || []).find(p => p.id === id);
+  if (!pos) return;
+
+  document.getElementById('posId').value = pos.id;
+  document.getElementById('modalTitle').textContent = `Modifier ${pos.name || pos.symbol}`;
+  document.getElementById('posSearch').value = pos.name || pos.symbol;
+  document.getElementById('posSymbol').value = pos.symbol || '';
+  document.getElementById('posName').value = pos.name || '';
+  document.getElementById('posBuyDate').value = pos.buyDate || '';
+  document.getElementById('posCurrency').value = pos.currency || 'EUR';
+  document.getElementById('posInvestedAmount').value = pos.investedAmount || '';
+  document.getElementById('posShares').value = pos.shares || '';
+  document.getElementById('posBuyPrice').value = pos.buyPrice || '';
+  document.getElementById('posNotes').value = pos.notes || '';
+
+  autocompleteDropdown.style.display = 'none';
+  positionModal.classList.add('active');
+};
+
 function closePositionModal() {
   positionModal.classList.remove('active');
 }
 
-// Submit Position Form
+// Submit Position Form (Permissive - never blocks, saves whatever you provide!)
 async function handleFormSubmit(e) {
   e.preventDefault();
 
+  const id = document.getElementById('posId').value;
   let symbol = document.getElementById('posSymbol').value.trim();
   let name = document.getElementById('posName').value.trim();
   const searchVal = document.getElementById('posSearch').value.trim();
 
-  // Fallback: if user typed ticker in search but didn't click dropdown
-  if (!symbol && searchVal) {
-    symbol = searchVal.toUpperCase();
-  }
-  if (!name && searchVal) {
-    name = searchVal;
-  }
+  // If symbol or name empty, fallback gracefully
+  if (!symbol && searchVal) symbol = searchVal.toUpperCase();
+  if (!name && searchVal) name = searchVal;
+  if (!symbol && name) symbol = name.toUpperCase();
+  if (!name && symbol) name = symbol;
+  if (!symbol) symbol = 'TITRE';
+  if (!name) name = 'Mon investissement';
 
-  const buyDate = document.getElementById('posBuyDate').value;
-  const currency = document.getElementById('posCurrency').value;
-  const investedAmount = parseFloat(document.getElementById('posInvestedAmount').value);
-  const shares = parseFloat(document.getElementById('posShares').value);
-  const buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || (shares > 0 ? investedAmount / shares : 0);
+  const buyDate = document.getElementById('posBuyDate').value || new Date().toISOString().split('T')[0];
+  const currency = document.getElementById('posCurrency').value || 'EUR';
+  const investedAmount = parseFloat(document.getElementById('posInvestedAmount').value) || 0;
+  const shares = parseFloat(document.getElementById('posShares').value) || 1;
+  const buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || (shares > 0 && investedAmount > 0 ? investedAmount / shares : 0);
   const notes = document.getElementById('posNotes').value;
 
-  if (!symbol) {
-    alert('Veuillez renseigner le symbole retenu (ex: SPCX, AAPL, BTC-USD).');
-    return;
-  }
-  if (!buyDate) {
-    alert('Veuillez renseigner la date d\'achat.');
-    return;
-  }
-  if (isNaN(investedAmount) || investedAmount <= 0) {
-    alert('Veuillez indiquer un montant investi valide.');
-    return;
-  }
-  if (isNaN(shares) || shares <= 0) {
-    alert('Veuillez indiquer un nombre de parts valide.');
-    return;
-  }
-
-  const newPos = {
-    id: 'pos_' + Date.now(),
+  const posData = {
+    id: id || ('pos_' + Date.now()),
     symbol: symbol.toUpperCase(),
-    name: name || symbol.toUpperCase(),
+    name: name,
     buyDate,
     currency,
     investedAmount,
@@ -1257,11 +1263,28 @@ async function handleFormSubmit(e) {
     buyPrice,
     notes
   };
-    notes
-  };
 
   const local = getLocalData();
   local.positions = local.positions || [];
+
+  if (id) {
+    const idx = local.positions.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      local.positions[idx] = { ...local.positions[idx], ...posData };
+    } else {
+      local.positions.unshift(posData);
+    }
+  } else {
+    local.positions.unshift(posData);
+  }
+
+  saveLocalData(local);
+  closePositionModal();
+  loadPortfolio(true);
+
+  // Sync with cloud
+  pushToCloud();
+}
   local.positions.unshift(newPos);
   saveLocalData(local);
 

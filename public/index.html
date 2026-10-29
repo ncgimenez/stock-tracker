@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stock & Crypto Tracker — Suivi Revolut Simplifié</title>
   <meta name="description" content="Suivi d'actions et cryptos Revolut sans graphiques. Dynamique jour par jour et suggestions d'action (Acheter / Garder / Vendre).">
-  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/style.css?v=1.1">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -128,31 +128,31 @@
         <input type="hidden" id="posId" value="">
         
         <div class="form-group">
-          <label for="posSearch">Nom ou Ticker de l'action / crypto</label>
+          <label for="posSearch">Recherche (Nom ou Ticker)</label>
           <div class="search-input-wrapper">
-            <input type="text" id="posSearch" placeholder="Ex: Apple, Tesla, LVMH, AAPL, BTC-USD..." autocomplete="off" required>
+            <input type="text" id="posSearch" placeholder="Ex: SpaceX, Apple, SPCX, TSLA, BTC-USD..." autocomplete="off">
             <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
           </div>
-          <small class="form-hint">Vous pouvez taper le nom complet ou le symbole boursier.</small>
+          <small class="form-hint">Tapez le nom ou le symbole (ex: SPCX pour SpaceX ETF).</small>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label for="posSymbol">Symbole retenu (Ticker)</label>
-            <input type="text" id="posSymbol" placeholder="Ex: SPCX, AAPL, BTC-USD" required>
-            <small class="form-hint">Le code boursier officiel.</small>
+            <label for="posSymbol">Symbole officiel (Ticker)</label>
+            <input type="text" id="posSymbol" placeholder="Ex: SPCX, AAPL, BTC-USD">
+            <small class="form-hint">Le code bourse pour les cours.</small>
           </div>
           <div class="form-group">
             <label for="posName">Nom affiché</label>
-            <input type="text" id="posName" placeholder="Ex: SpaceX, Apple..." required>
-            <small class="form-hint">Votre titre personnalisé.</small>
+            <input type="text" id="posName" placeholder="Ex: SpaceX, Apple...">
+            <small class="form-hint">Votre titre personnel.</small>
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label for="posBuyDate">Date d'achat</label>
-            <input type="date" id="posBuyDate" required>
+            <input type="date" id="posBuyDate">
           </div>
           <div class="form-group">
             <label for="posCurrency">Devise d'achat</label>
@@ -167,13 +167,13 @@
         <div class="form-row">
           <div class="form-group">
             <label for="posInvestedAmount">Montant total investi (€)</label>
-            <input type="number" id="posInvestedAmount" step="any" min="0" placeholder="Ex: 48.82" required>
+            <input type="number" id="posInvestedAmount" step="any" min="0" placeholder="Ex: 48.82">
             <small class="form-hint">Ce que vous avez payé sur Revolut.</small>
           </div>
           <div class="form-group">
             <label for="posShares">Nombre de parts / actions</label>
-            <input type="number" id="posShares" step="any" min="0" placeholder="Ex: 0.36386588" required>
-            <small class="form-hint">Nombre précis avec toutes les décimales.</small>
+            <input type="number" id="posShares" step="any" min="0" placeholder="Ex: 0.36386588">
+            <small class="form-hint">Fraction exacte avec toutes les décimales.</small>
           </div>
         </div>
 

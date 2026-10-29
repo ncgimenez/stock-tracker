@@ -156,10 +156,30 @@ function getOrCreateRecoveryKey() {
 let CURRENT_ACCOUNT_ID = getOrCreateAccountId();
 let CURRENT_RECOVERY_KEY = getOrCreateRecoveryKey();
 
+function getAbortSignal(ms) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  const controller = new AbortController();
+  setTimeout(() => {
+    try { controller.abort(); } catch (e) {}
+  }, ms);
+  return controller.signal;
+}
+
 // --- INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', async () => {
-  initTheme();
-  setupEventListeners();
+function startApp() {
+  try {
+    initTheme();
+  } catch (e) {
+    console.error('initTheme error:', e);
+  }
+
+  try {
+    setupEventListeners();
+  } catch (e) {
+    console.error('setupEventListeners error:', e);
+  }
 
   // Initialize Supabase client
   if (window.supabase) {
@@ -179,7 +199,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     initApp();
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
 async function initApp() {
   updateSecurityUI();
@@ -644,8 +670,7 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
 
   try {
     const res = await fetch(proxyUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(3500)
+      signal: getAbortSignal(3500)
     });
 
     if (res.ok) {
@@ -725,8 +750,7 @@ async function getClientRateToEUR(fromCurrency) {
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/EUR${cur}=X?range=1d&interval=1d`;
     const proxyUrl = `https://proxy.cors.dev/${targetUrl}`;
     const res = await fetch(proxyUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(3000)
+      signal: getAbortSignal(3000)
     });
     if (res.ok) {
       const json = await res.json();
@@ -980,26 +1004,84 @@ async function buildPortfolioData() {
   };
 }
 
+// --- FAST LOCAL FALLBACK (0ms INSTANT RENDER) ---
+function renderInstantPositions(local) {
+  const positions = local.positions || [];
+  let totalInvestedEur = 0;
+  let totalCurrentValueEur = 0;
+
+  const enriched = positions.map(pos => {
+    const shares = parseFloat(pos.shares) || 0;
+    const buyPrice = parseFloat(pos.buyPrice) || 0;
+    const investedEur = parseFloat(pos.investedAmount) || (shares * buyPrice);
+    totalInvestedEur += investedEur;
+    totalCurrentValueEur += investedEur;
+
+    return {
+      id: pos.id,
+      symbol: pos.symbol,
+      name: pos.name || pos.symbol,
+      buyDate: pos.buyDate,
+      buyPrice: buyPrice,
+      shares: shares,
+      investedEur: investedEur,
+      currency: pos.currency || 'EUR',
+      currentPrice: buyPrice,
+      currentPriceEur: buyPrice,
+      currentValueEur: investedEur,
+      totalGainEur: 0,
+      totalGainPercent: 0,
+      todayChangePercent: 0,
+      todayChangeEur: 0,
+      consecutiveUp: 0,
+      consecutiveDown: 0,
+      suggestion: {
+        action: 'HOLD',
+        label: 'Synchronisation...',
+        badgeClass: 'badge-neutral',
+        reason: 'Actualisation des cours en cours...'
+      },
+      dailyBreakdown: [],
+      notes: pos.notes || ''
+    };
+  });
+
+  portfolio = {
+    summary: {
+      totalInvestedEur,
+      totalCurrentValueEur,
+      totalGainEur: 0,
+      totalGainPercent: 0,
+      totalDayGainEur: 0,
+      totalDayGainPercent: 0,
+      positionsCount: enriched.length,
+      lastSync: new Date().toISOString()
+    },
+    settings: local.settings || {},
+    positions: enriched
+  };
+
+  renderSummary();
+  renderPositions();
+}
+
 // --- LOAD PORTFOLIO ---
 async function loadPortfolio(forceRefresh = false) {
-  positionsContainer.innerHTML = `
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>Synchronisation avec les cours des marchés...</p>
-    </div>
-  `;
+  const local = getLocalData();
+  // Immediately render local data in 0ms so the screen is never blocked
+  if (!portfolio) {
+    renderInstantPositions(local);
+  }
 
   try {
     portfolio = await buildPortfolioData();
     renderSummary();
     renderPositions();
   } catch (err) {
-    positionsContainer.innerHTML = `
-      <div class="empty-state">
-        <p>Impossible de charger le portefeuille : ${err.message}</p>
-        <button class="btn btn-secondary" onclick="loadPortfolio(true)" style="margin-top: 12px;">Réessayer</button>
-      </div>
-    `;
+    console.warn('Erreur synchronisation portfolio:', err);
+    if (!portfolio) {
+      renderInstantPositions(local);
+    }
   }
 }
 
@@ -1190,7 +1272,9 @@ function handleSearchInput(e) {
     try {
       const targetUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=6&newsCount=0`;
       const proxyUrl = `https://proxy.cors.dev/${targetUrl}`;
-      const res = await fetch(proxyUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const res = await fetch(proxyUrl, {
+        signal: getAbortSignal(4000)
+      });
       const data = await res.json();
       const results = (data.quotes || []).map(item => ({
         symbol: item.symbol,

@@ -70,6 +70,7 @@ const clientCache = {
 // State
 let currentTab = 'active'; // 'active' | 'cashout' | 'ideas'
 let currentFilter = 'all'; // 'all' | 'gain' | 'loss'
+let currentIdeaFilter = 'all'; // 'all' | 'bounce' | 'breakout' | 'etf'
 let viewMode = localStorage.getItem('st_view_mode') || 'compact'; // default to concise view
 let expandedPositionIds = new Set();
 
@@ -869,6 +870,19 @@ function setupEventListeners() {
     });
   }
 
+  // Ideas Filter Pills (All / Bounce / Breakout / ETF)
+  const ideasFilterPills = document.getElementById('ideasFilterPills');
+  if (ideasFilterPills) {
+    ideasFilterPills.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-pill-btn');
+      if (!btn) return;
+      document.querySelectorAll('#ideasFilterPills .filter-pill-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentIdeaFilter = btn.dataset.ideaFilter || 'all';
+      renderIdeasTab();
+    });
+  }
+
   // View Mode Toggle (Compact vs Detailed)
   const viewToggleBtn = document.getElementById('viewModeToggleBtn');
   if (viewToggleBtn) {
@@ -1321,7 +1335,7 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
           shortName: meta.shortName || meta.longName || symbol,
           currency: (meta.currency || 'USD').toUpperCase(),
           currentPrice,
-          previousClose: meta.chartPreviousClose || (validDaily.length > 1 ? validDaily[validDaily.length - 2].close : currentPrice),
+          previousClose: (validDaily.length > 1 ? validDaily[validDaily.length - 2].close : (meta.chartPreviousClose || currentPrice)),
           dayHigh,
           dayLow,
           history: validDaily,
@@ -3255,16 +3269,23 @@ function deleteCashOutRecord(id) {
   pushToCloud();
 }
 
-// --- REVOLUT IDEAS TAB ---
+// --- REVOLUT SMART OPPORTUNITY SCANNER ---
 const REVOLUT_WATCHLIST = [
-  { symbol: 'SPCX', name: 'Procure Space ETF', type: 'ETF', currency: 'USD', desc: 'ETF spatial (SpaceX, lanceurs & télécoms spatiaux)' },
-  { symbol: 'VOO', name: 'Vanguard S&P 500 ETF', type: 'ETF', currency: 'USD', desc: 'Les 500 plus grandes entreprises américaines' },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'STOCK', currency: 'USD', desc: 'Leader mondial des puces IA & cartes graphiques' },
-  { symbol: 'AAPL', name: 'Apple Inc.', type: 'STOCK', currency: 'USD', desc: 'Leader mondial de la tech et smartphones' },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'STOCK', currency: 'USD', desc: 'Cloud Azure d\'entreprise, Windows & IA' },
-  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'STOCK', currency: 'USD', desc: 'Véhicules électriques, robotique & énergie' },
-  { symbol: 'BTC-USD', name: 'Bitcoin', type: 'CRYPTO', currency: 'USD', desc: 'Première réserve de valeur numérique' },
-  { symbol: 'ETH-USD', name: 'Ethereum', type: 'CRYPTO', currency: 'USD', desc: 'Réseau leader des contrats intelligents' }
+  { symbol: 'MSFT', name: 'Microsoft Corp.', type: 'STOCK', currency: 'USD', desc: 'Cloud Azure d\'entreprise, IA Copilot & logiciels' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'STOCK', currency: 'USD', desc: 'Véhicules électriques, robotique & stockage d\'énergie' },
+  { symbol: 'PLTR', name: 'Palantir Technologies', type: 'STOCK', currency: 'USD', desc: 'Plateforme logicielle d\'intelligence de données & défense' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'STOCK', currency: 'USD', desc: 'Leader mondial absolu des puces d\'accélération IA' },
+  { symbol: 'AAPL', name: 'Apple Inc.', type: 'STOCK', currency: 'USD', desc: 'Écosystème iPhone, Services premium & puces Apple Silicon' },
+  { symbol: 'META', name: 'Meta Platforms', type: 'STOCK', currency: 'USD', desc: 'Réseaux sociaux (Instagram, WhatsApp) & IA Llama' },
+  { symbol: 'AMZN', name: 'Amazon.com', type: 'STOCK', currency: 'USD', desc: 'Leader mondial de l\'e-commerce & du Cloud AWS' },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'STOCK', currency: 'USD', desc: 'Processeurs serveurs EPYC & puces accélératrices IA' },
+  { symbol: 'UBER', name: 'Uber Technologies', type: 'STOCK', currency: 'USD', desc: 'Plateforme mondiale de mobilité urbaine & livraison UberEats' },
+  { symbol: 'COIN', name: 'Coinbase Global', type: 'STOCK', currency: 'USD', desc: 'Première plateforme réglementée d\'échange de crypto-actifs' },
+  { symbol: 'VOO', name: 'Vanguard S&P 500 ETF', type: 'ETF', currency: 'USD', desc: 'Les 500 plus grandes entreprises américaines diversifiées' },
+  { symbol: 'QQQ', name: 'Invesco QQQ Trust', type: 'ETF', currency: 'USD', desc: 'Indice des 100 plus grands leaders technologiques (Nasdaq)' },
+  { symbol: 'SPCX', name: 'Procure Space ETF', type: 'ETF', currency: 'USD', desc: 'ETF spatial (SpaceX, lanceurs de satellites & télécoms spatiaux)' },
+  { symbol: 'BTC-USD', name: 'Bitcoin', type: 'CRYPTO', currency: 'USD', desc: 'Réserve de valeur numérique décentralisée leader mondial' },
+  { symbol: 'SOL-USD', name: 'Solana', type: 'CRYPTO', currency: 'USD', desc: 'Blockchain haute performance à très faible coût de transaction' }
 ];
 
 let ideasDataCache = null;
@@ -3275,8 +3296,9 @@ async function renderIdeasTab() {
 
   if (!ideasDataCache) {
     gridEl.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
-        <p style="font-size: 15px;">⏳ ${currentLang === 'en' ? 'Loading live Revolut quotes & technical indicators...' : 'Récupération des cours en direct et signaux techniques Revolut...'}</p>
+      <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; color: var(--text-muted);">
+        <p style="font-size: 15px; font-weight: 600; color: var(--text-main);">⏳ Analyse technique en direct des opportunités Revolut...</p>
+        <p style="font-size: 12px; margin-top: 6px;">Calcul des sommets 30j, des replis sains et des supports clés en cours...</p>
       </div>
     `;
 
@@ -3285,58 +3307,155 @@ async function renderIdeasTab() {
         REVOLUT_WATCHLIST.map(async (item) => {
           try {
             const chartData = await fetchClientChart(item.symbol, 100);
-            const candles = chartData?.candles || [];
-            if (candles.length === 0) return { ...item, error: true };
+            const history = chartData?.history || [];
+            if (history.length === 0) return { ...item, error: true };
 
-            const currentPrice = candles[candles.length - 1].close;
-            const startPrice = candles[0].close;
-            const changePct = ((currentPrice - startPrice) / startPrice) * 100;
-            const prices = candles.map(c => c.close);
-            const high30d = Math.max(...prices);
-            const low30d = Math.min(...prices);
+            const currentPrice = chartData.currentPrice;
+            const previousClose = chartData.previousClose || currentPrice;
+            const todayChangePct = previousClose > 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0;
 
-            let signalLabel = currentLang === 'en' ? 'Consolidating' : 'En consolidation';
-            let signalClass = 'status-badge-blue';
+            // Closes over the last ~22 trading sessions (approx 30 calendar days)
+            const closes30d = history.slice(-22).map(h => h.close);
+            const high30d = Math.max(...closes30d, currentPrice);
+            const low30d = Math.min(...closes30d, currentPrice);
 
-            if (currentPrice <= low30d * 1.03) {
-              signalLabel = currentLang === 'en' ? '🟢 Key Support / Dip Buying' : '🟢 Support clé / Potentiel rebond';
-              signalClass = 'status-badge-up';
-            } else if (currentPrice >= high30d * 0.97) {
-              signalLabel = currentLang === 'en' ? '⚠️ Near 30d Peak' : '⚠️ Proche du sommet 30j';
-              signalClass = 'status-badge-orange';
-            } else if (changePct > 5) {
-              signalLabel = currentLang === 'en' ? '📈 Bullish Uptrend' : '📈 Tendance haussière';
-              signalClass = 'status-badge-up';
+            // Pullback from 30d peak
+            const pullbackFromPeakPct = high30d > 0 ? ((high30d - currentPrice) / high30d) * 100 : 0;
+            const upsideToPeakPct = currentPrice > 0 ? ((high30d - currentPrice) / currentPrice) * 100 : 0;
+
+            // Recent support: swing low over recent 7-8 trading days
+            const recentWindow = history.slice(-8).map(h => h.close);
+            const recentLow = recentWindow.length > 0 ? Math.min(...recentWindow) : low30d;
+            const distFromSupportPct = recentLow > 0 ? ((currentPrice - recentLow) / recentLow) * 100 : 0;
+
+            // Trend over 30d
+            const startPrice = closes30d[0] || currentPrice;
+            const monthTrendPct = startPrice > 0 ? ((currentPrice - startPrice) / startPrice) * 100 : 0;
+
+            // Setup classification
+            let filterCategory = 'neutral';
+            let signalLabel = '⏳ EN CONSOLIDATION';
+            let tagClass = 'badge-neutral';
+            let isTopOpportunity = false;
+            let score = 40;
+            let rationale = '';
+
+            if (item.type === 'ETF') {
+              filterCategory = 'etf';
+              signalLabel = '🛡️ ETF CROISSANCE SÛRE';
+              tagClass = 'badge-blue';
+              score = 65;
+              rationale = `Fonds indiciel diversifié à faible risque. Repli modéré de -${pullbackFromPeakPct.toFixed(1)}% par rapport à son record (${formatCurrency(high30d, item.currency)}). Idéal pour accumuler sereinement à long terme.`;
+            } else if (pullbackFromPeakPct >= 2.0 && pullbackFromPeakPct <= 9.0 && distFromSupportPct <= 4.0) {
+              // The exact "descend à peine puis rebondit sur son support" setup requested by user
+              filterCategory = 'bounce';
+              signalLabel = '🎯 REBOND SUR SUPPORT';
+              tagClass = 'badge-success';
+              isTopOpportunity = true;
+              score = 100 - Math.abs(pullbackFromPeakPct - 4);
+              rationale = `Repli sain de -${pullbackFromPeakPct.toFixed(1)}% depuis le sommet (${formatCurrency(high30d, item.currency)}). Le cours a testé son support à ${formatCurrency(recentLow, item.currency)} (+${distFromSupportPct.toFixed(1)}% au-dessus) et se stabilise. Ratio gain/risque optimal pour viser le retour au sommet (+${upsideToPeakPct.toFixed(1)}%).`;
+            } else if (pullbackFromPeakPct < 2.0) {
+              // Compression right under 30d peak (Breakout candidate)
+              filterCategory = 'breakout';
+              signalLabel = '🚀 SOMMET & BREAKOUT';
+              tagClass = 'badge-orange';
+              isTopOpportunity = true;
+              score = 90;
+              rationale = `Compression au contact direct du sommet 30j (${formatCurrency(high30d, item.currency)}), à seulement -${pullbackFromPeakPct.toFixed(1)}%. Forte pression acheteuse (${monthTrendPct >= 0 ? '+' : ''}${monthTrendPct.toFixed(1)}% sur le mois). Une cassure du sommet libérerait une vague haussière.`;
+            } else if (pullbackFromPeakPct > 9.0 && todayChangePct >= 1.5) {
+              // Deep pullback that is bouncing strongly today off a major support floor
+              filterCategory = 'bounce';
+              signalLabel = '🛡️ REBOND SUR PLANCHER';
+              tagClass = 'badge-success';
+              isTopOpportunity = true;
+              score = 80;
+              rationale = `Après un creux vers ${formatCurrency(recentLow, item.currency)}, fort rebond acheteur de +${todayChangePct.toFixed(2)}% aujourd'hui confirmant que les acheteurs défendent ce support. Potentiel de reprise de +${upsideToPeakPct.toFixed(1)}% vers le sommet.`;
+            } else {
+              filterCategory = 'neutral';
+              signalLabel = '⏳ EN CONSOLIDATION';
+              tagClass = 'badge-neutral';
+              score = 40 - Math.min(pullbackFromPeakPct, 30);
+              rationale = `Le titre oscille entre le support à ${formatCurrency(recentLow, item.currency)} et le sommet à ${formatCurrency(high30d, item.currency)} (-${pullbackFromPeakPct.toFixed(1)}%). Attendre un test net du support ou un signal de reprise avant d'entrer.`;
             }
 
             return {
               ...item,
               currentPrice,
-              changePct,
+              previousClose,
+              todayChangePct,
               high30d,
               low30d,
+              recentLow,
+              pullbackFromPeakPct,
+              upsideToPeakPct,
+              distFromSupportPct,
+              monthTrendPct,
+              filterCategory,
               signalLabel,
-              signalClass
+              tagClass,
+              isTopOpportunity,
+              score,
+              rationale,
+              error: false
             };
           } catch (e) {
             return { ...item, error: true };
           }
         })
       );
+
+      // Sort by score descending (Top opportunities first!)
+      results.sort((a, b) => (b.score || 0) - (a.score || 0));
       ideasDataCache = results;
     } catch (err) {
-      gridEl.innerHTML = `<div style="grid-column: 1 / -1; color: var(--color-down);">Erreur: ${err.message}</div>`;
+      gridEl.innerHTML = `<div style="grid-column: 1 / -1; color: var(--color-down);">Erreur d'analyse : ${err.message}</div>`;
       return;
     }
   }
 
-  gridEl.innerHTML = ideasDataCache.map(idea => {
+  // Update filter pill counts
+  const validIdeas = ideasDataCache.filter(i => !i.error);
+  const countAll = validIdeas.length;
+  const countBounce = validIdeas.filter(i => i.filterCategory === 'bounce').length;
+  const countBreakout = validIdeas.filter(i => i.filterCategory === 'breakout').length;
+  const countEtf = validIdeas.filter(i => i.type === 'ETF').length;
+
+  const countAllEl = document.getElementById('countIdeaAll');
+  const countBounceEl = document.getElementById('countIdeaBounce');
+  const countBreakoutEl = document.getElementById('countIdeaBreakout');
+  const countEtfEl = document.getElementById('countIdeaEtf');
+
+  if (countAllEl) countAllEl.textContent = countAll;
+  if (countBounceEl) countBounceEl.textContent = countBounce;
+  if (countBreakoutEl) countBreakoutEl.textContent = countBreakout;
+  if (countEtfEl) countEtfEl.textContent = countEtf;
+
+  // Filter ideas according to active pill
+  let filtered = ideasDataCache;
+  if (currentIdeaFilter === 'bounce') {
+    filtered = ideasDataCache.filter(i => i.filterCategory === 'bounce');
+  } else if (currentIdeaFilter === 'breakout') {
+    filtered = ideasDataCache.filter(i => i.filterCategory === 'breakout');
+  } else if (currentIdeaFilter === 'etf') {
+    filtered = ideasDataCache.filter(i => i.type === 'ETF');
+  }
+
+  if (filtered.length === 0) {
+    gridEl.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+        <p>Aucune opportunité dans cette catégorie pour le moment.</p>
+      </div>
+    `;
+    return;
+  }
+
+  gridEl.innerHTML = filtered.map(idea => {
     if (idea.error) {
       return `
         <div class="idea-card">
           <div class="idea-top">
             <span class="idea-symbol">${escapeHtml(idea.symbol)}</span>
-            <span class="idea-tag status-badge-blue">${escapeHtml(idea.type)}</span>
+            <span class="badge" style="font-size: 10px;">${escapeHtml(idea.type)}</span>
           </div>
           <div>
             <div class="idea-name">${escapeHtml(idea.name)}</div>
@@ -3347,40 +3466,63 @@ async function renderIdeasTab() {
       `;
     }
 
-    const isUp = idea.changePct >= 0;
-    const sign = isUp ? '+' : '';
+    const todayUp = idea.todayChangePct >= 0;
+    const todaySign = todayUp ? '+' : '';
 
     return `
-      <div class="idea-card">
+      <div class="idea-card ${idea.isTopOpportunity ? 'is-top-opportunity' : ''}">
         <div class="idea-top">
           <div>
             <span class="idea-symbol">${escapeHtml(idea.symbol)}</span>
             <span class="badge" style="margin-left: 6px; font-size: 10px;">${escapeHtml(idea.type)}</span>
           </div>
-          <span class="idea-tag ${idea.signalClass}">${escapeHtml(idea.signalLabel)}</span>
+          <span class="idea-tag ${idea.tagClass}">${escapeHtml(idea.signalLabel)}</span>
         </div>
 
         <div>
           <div class="idea-name">${escapeHtml(idea.name)}</div>
-          <div class="idea-price">${formatCurrency(idea.currentPrice, idea.currency)} 
-            <span style="font-size: 12px; font-weight: 700; color: ${isUp ? 'var(--color-up)' : 'var(--color-down)'}; margin-left: 6px;">
-              ${sign}${idea.changePct.toFixed(2)}% (30j)
+          <div class="idea-price">
+            ${formatCurrency(idea.currentPrice, idea.currency)}
+            <span style="font-size: 12px; font-weight: 700; color: ${todayUp ? 'var(--color-up)' : 'var(--color-down)'}; margin-left: 6px;">
+              ${todaySign}${idea.todayChangePct.toFixed(2)}% ajd
             </span>
           </div>
-          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-            ${escapeHtml(idea.desc)}
+
+          <!-- 3-Metrics Technical Strip -->
+          <div class="idea-metrics-strip">
+            <div class="idea-metric-box">
+              <span class="label">Sommet 30j</span>
+              <span class="val">${formatCurrency(idea.high30d, idea.currency)}</span>
+            </div>
+            <div class="idea-metric-box">
+              <span class="label">Repli du sommet</span>
+              <span class="val" style="color: ${idea.pullbackFromPeakPct <= 8 ? 'var(--color-up)' : 'var(--text-main)'};">
+                -${idea.pullbackFromPeakPct.toFixed(1)}%
+              </span>
+            </div>
+            <div class="idea-metric-box">
+              <span class="label">Support testé</span>
+              <span class="val">${formatCurrency(idea.recentLow, idea.currency)}</span>
+            </div>
           </div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-            Min 30j : <strong>${formatCurrency(idea.low30d, idea.currency)}</strong> • Max 30j : <strong>${formatCurrency(idea.high30d, idea.currency)}</strong>
+
+          <!-- Technical Rationale -->
+          <div class="idea-why-box">
+            ${escapeHtml(idea.rationale)}
           </div>
         </div>
 
-        <button class="btn btn-primary" onclick="quickAddIdea('${idea.symbol}', '${escapeJs(idea.name)}', '${idea.type}', '${idea.currency}')" style="width: 100%; font-size: 12px; padding: 8px;">
+        <button class="btn btn-primary" onclick="quickAddIdea('${idea.symbol}', '${escapeJs(idea.name)}', '${idea.type}', '${idea.currency}')" style="width: 100%; font-size: 12px; padding: 9px; margin-top: 4px;">
           + ${currentLang === 'en' ? 'Add to my portfolio' : 'Ajouter à mon portefeuille'}
         </button>
       </div>
     `;
   }).join('');
+}
+
+function refreshIdeasScanner() {
+  ideasDataCache = null;
+  renderIdeasTab();
 }
 
 function quickAddIdea(symbol, name, type, currency) {
@@ -3410,3 +3552,4 @@ window.togglePositionDetails = togglePositionDetails;
 window.deleteCashOutRecord = deleteCashOutRecord;
 window.restoreCashOutRecord = restoreCashOutRecord;
 window.quickAddIdea = quickAddIdea;
+window.refreshIdeasScanner = refreshIdeasScanner;

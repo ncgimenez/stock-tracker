@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stock & Crypto Tracker — Suivi Revolut Simplifié</title>
   <meta name="description" content="Suivi d'actions et cryptos Revolut sans graphiques. Dynamique jour par jour et suggestions d'action (Acheter / Garder / Vendre).">
-  <link rel="stylesheet" href="./css/style.css?v=2.5">
+  <link rel="stylesheet" href="./css/style.css?v=2.6">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -184,11 +184,25 @@
       </div>
     </section>
 
-    <!-- IDEAS & WATCHLIST REVOLUT TAB CONTENT -->
+    <!-- IDEAS & SMART OPPORTUNITIES TAB CONTENT -->
     <section class="tab-content" id="ideasTabSection" style="display: none;">
       <div class="ideas-header-banner">
-        <h3>💡 Idées d'investissements populaires sur Revolut</h3>
-        <p>Sélection de valeurs surveillées avec signaux techniques automatiques (supports, rebonds et sommets).</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3>💡 Scanner d'Opportunités d'Achat Intelligentes (Revolut)</h3>
+            <p>Analyse automatique en direct : détection des actions en tendance haussière qui ont marqué un repli sain sur support (« descend à peine ») et s'apprêtent à repartir vers leur sommet.</p>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshIdeasScanner()" style="font-size: 11px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 4px;">
+            🔄 Scanner à nouveau
+          </button>
+        </div>
+
+        <div class="filter-pills-group" id="ideasFilterPills" style="margin-top: 14px;">
+          <button class="filter-pill-btn active" data-idea-filter="all">Toutes (<span id="countIdeaAll">0</span>)</button>
+          <button class="filter-pill-btn filter-green" data-idea-filter="bounce">🎯 Rebonds sur support (<span id="countIdeaBounce">0</span>)</button>
+          <button class="filter-pill-btn" data-idea-filter="breakout" style="border-color: var(--color-warning);">🚀 Sommets & Breakouts (<span id="countIdeaBreakout">0</span>)</button>
+          <button class="filter-pill-btn" data-idea-filter="etf">🛡️ ETFs & Fonds sûrs (<span id="countIdeaEtf">0</span>)</button>
+        </div>
       </div>
 
       <div class="ideas-grid" id="ideasGrid">
@@ -562,6 +576,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=2.5"></script>
+  <script src="./js/app.js?v=2.6"></script>
 </body>
 </html>

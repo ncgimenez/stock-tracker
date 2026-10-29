@@ -1754,8 +1754,12 @@ function toggleTheme() {
 
 function updateThemeIcon(theme) {
   const icon = document.querySelector('.theme-icon');
+  const btn = document.getElementById('themeToggleBtn');
   if (icon) {
-    icon.textContent = theme === 'dark' ? '🌙' : '☀️';
+    icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+  }
+  if (btn) {
+    btn.title = theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre';
   }
 }
 

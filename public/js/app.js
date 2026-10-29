@@ -1314,7 +1314,15 @@ function getLocalData() {
         const sh = parseFloat(pos.shares) || 0;
         let inv = parseFloat(pos.investedAmount) || 0;
         let pr = parseFloat(pos.buyPrice) || 0;
-        if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
+        if (pos.symbol === 'PLTR') {
+          pos.shares = 0.30709329;
+          pos.investedAmount = 45.00;
+          pos.buyPrice = 146.54;
+          pos.buyFee = 1.17;
+          pos.sellFee = 1.17;
+          pos.currency = 'USD';
+          changed = true;
+        } else if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
           pos.symbol = 'DFTK.DE';
           pos.name = 'DF Deutsche Forfait AG';
           pos.shares = 1.01226993;
@@ -1679,7 +1687,13 @@ async function buildPortfolioData() {
       const chartCurrency = (chart.currency || posCurrency).toUpperCase();
 
       // AUTO-REPAIR MISSING BUY PRICE OR INVESTED AMOUNT
-      if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
+      if (pos.symbol === 'PLTR') {
+        buyPrice = 146.54;
+        investedNative = 45.00;
+        pos.buyPrice = 146.54;
+        pos.investedAmount = 45.00;
+        pos.currency = 'USD';
+      } else if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
         buyPrice = 16.30;
         investedNative = 17.50;
         pos.symbol = 'DFTK.DE';
@@ -1689,20 +1703,25 @@ async function buildPortfolioData() {
         pos.buyFee = 1.00;
         pos.sellFee = 1.00;
         pos.currency = 'EUR';
-      } else if (buyPrice <= 0 || investedNative <= 0) {
-        if (pos.symbol === 'SPCX') {
-          buyPrice = 134.17;
-          investedNative = 48.82;
-        } else if (pos.buyDate && chart.history && chart.history.length > 0) {
+      } else if (pos.symbol === 'SPCX') {
+        buyPrice = 134.17;
+        investedNative = 48.82;
+        pos.buyPrice = 134.17;
+        pos.investedAmount = 48.82;
+      } else if (investedNative > 0 && buyPrice <= 0 && shares > 0) {
+        buyPrice = Math.round((investedNative / shares) * 100) / 100;
+        pos.buyPrice = buyPrice;
+      } else if (buyPrice > 0 && investedNative <= 0 && shares > 0) {
+        investedNative = Math.round((shares * buyPrice) * 100) / 100;
+        pos.investedAmount = investedNative;
+      } else if (buyPrice <= 0 && investedNative <= 0) {
+        if (pos.buyDate && chart.history && chart.history.length > 0) {
           const candle = chart.history.find(c => c.dateStr === pos.buyDate);
           buyPrice = (candle && candle.close > 0) ? Math.round(candle.close * 100) / 100 : (chart.currentPrice || 100);
           investedNative = Math.round((shares * buyPrice) * 100) / 100;
-        } else if (chart.currentPrice > 0) {
-          buyPrice = chart.currentPrice;
-          investedNative = Math.round((shares * buyPrice) * 100) / 100;
+          pos.buyPrice = buyPrice;
+          pos.investedAmount = investedNative;
         }
-        pos.buyPrice = buyPrice;
-        pos.investedAmount = investedNative;
       }
 
       const posToEurRate = await getClientRateToEUR(posCurrency);

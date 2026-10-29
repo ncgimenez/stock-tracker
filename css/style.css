@@ -985,3 +985,113 @@ input[type="range"] {
     align-items: stretch;
   }
 }
+
+/* --- SECURITY, PIN & QR CODE STYLES --- */
+.qr-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  margin: 14px auto;
+  width: fit-content;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.qr-image {
+  width: 170px;
+  height: 170px;
+  display: block;
+}
+
+.pin-input-group {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.pin-digit {
+  width: 52px;
+  height: 60px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  background: var(--card-sub-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.pin-digit:focus {
+  border-color: var(--color-blue);
+  box-shadow: 0 0 0 2px var(--color-blue-bg);
+  transform: translateY(-2px);
+}
+
+.recovery-box {
+  background: var(--card-sub-bg);
+  border: 1px dashed var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.recovery-key-text {
+  font-family: monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-warning);
+  user-select: all;
+  margin: 8px 0;
+  word-break: break-all;
+}
+
+.account-id-pill {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--card-sub-bg);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+  color: var(--color-blue);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--card-border);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.sub-tab-btn {
+  background: transparent;
+  border: none;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.sub-tab-btn:hover {
+  color: var(--text-main);
+}
+
+.sub-tab-btn.active {
+  color: var(--text-main);
+  background: var(--card-sub-bg);
+}

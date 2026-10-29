@@ -20,9 +20,9 @@
         <p class="brand-subtitle">Progression jour par jour • Zéro graphique inutile • Aide à la décision</p>
       </div>
       <div class="header-actions">
-        <button id="authBtn" class="btn btn-secondary" title="Compte et synchronisation">
-          <span id="authBtnIcon">👤</span>
-          <span id="authBtnText">Connexion</span>
+        <button id="securityModalBtn" class="btn btn-secondary" title="Sécurité, Code PIN & Appareils">
+          <span id="securityStatusIcon">🔒</span>
+          <span id="securityBtnText">Sécurité & Appareils</span>
         </button>
         <button id="themeToggleBtn" class="btn btn-secondary icon-btn" title="Changer le thème">
           <span class="theme-icon">🌙</span>
@@ -260,60 +260,142 @@
     </div>
   </div>
 
-  <!-- MODAL: AUTHENTICATION / SUPABASE -->
-  <div class="modal-backdrop" id="authModal">
+  <!-- MODAL: SECURITY, PIN & PAIRING -->
+  <div class="modal-backdrop" id="securityModal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 id="authModalTitle">Synchronisation & Compte</h2>
-        <button class="modal-close" id="authCloseBtn">&times;</button>
+        <h2>Sécurité & Appareils</h2>
+        <button class="modal-close" id="securityCloseBtn">&times;</button>
       </div>
 
-      <!-- Logged out view -->
-      <div id="authLoggedOutView">
+      <!-- SUB TABS -->
+      <div class="sub-tabs">
+        <button type="button" class="sub-tab-btn active" id="tabMyAccountBtn">Mon Compte & Clés</button>
+        <button type="button" class="sub-tab-btn" id="tabPairDeviceBtn">Lier mon iPhone</button>
+        <button type="button" class="sub-tab-btn" id="tabPinBtn">Code PIN (2FA)</button>
+      </div>
+
+      <!-- TAB 1: Mon Compte & Clés -->
+      <div id="viewMyAccount" class="tab-view">
         <p class="settings-intro">
-          Connectez-vous <strong>sans mot de passe</strong> pour synchroniser automatiquement vos investissements Revolut entre votre Mac, votre iPhone et tous vos appareils.
+          Votre compte est <strong>100% anonyme</strong> : aucune adresse e-mail ni nom n'est demandé. Vos données sont isolées et synchronisées dans le cloud Supabase.
         </p>
 
-        <form id="magicLinkForm">
-          <div class="form-group">
-            <label for="authEmail">Votre adresse e-mail</label>
-            <input type="email" id="authEmail" placeholder="votre.email@exemple.com" required>
-            <small class="form-hint">Vous recevrez un lien de connexion instantané (zéro mot de passe à retenir).</small>
+        <div class="setting-item">
+          <label>Votre Identifiant Anonyme Unique</label>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+            <div class="account-id-pill" id="displayAccountId">—</div>
+            <button type="button" class="btn btn-secondary" id="copyAccountIdBtn" style="font-size: 11px;">Copier</button>
           </div>
-
-          <div id="authFeedback" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 13px;"></div>
-
-          <div class="modal-footer" style="padding-top: 14px;">
-            <button type="submit" class="btn btn-primary" id="sendMagicLinkBtn" style="width: 100%; justify-content: center;">
-              Envoyer mon lien de connexion ✉️
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Logged in view -->
-      <div id="authLoggedInView" style="display: none;">
-        <div style="background: var(--card-sub-bg); padding: 16px; border-radius: 10px; border: 1px solid var(--card-border); margin-bottom: 20px;">
-          <div style="font-size: 11px; font-weight: 700; color: var(--color-up); text-transform: uppercase; margin-bottom: 6px;">
-            ● Connectée & Données synchronisées
-          </div>
-          <div style="font-size: 15px; font-weight: 700; color: var(--text-main);" id="userEmailDisplay">
-            —
-          </div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="userIdDisplay">
-            ID: —
-          </div>
+          <small class="form-hint">C'est la clé unique qui identifie votre portefeuille.</small>
         </div>
 
-        <p class="settings-intro">
-          Vos positions sont sécurisées et synchronisées avec votre base de données Supabase personnelle.
-        </p>
-
-        <div class="modal-footer" style="padding-top: 14px;">
-          <button type="button" class="btn btn-ghost-danger" id="logoutBtn" style="width: 100%; justify-content: center; padding: 10px;">
-            Se déconnecter
+        <div class="setting-item">
+          <div class="setting-header">
+            <div>
+              <strong>Protection par Code PIN</strong>
+              <p id="pinStatusDesc">Aucun code PIN défini.</p>
+            </div>
+            <span class="setting-value" id="pinStatusBadge">Désactivé</span>
+          </div>
+          <button type="button" class="btn btn-secondary" id="openPinSetupBtn" style="font-size: 11px;">
+            Définir / Modifier mon code PIN
           </button>
         </div>
+
+        <!-- RECOVERY KEY BOX -->
+        <div class="recovery-box">
+          <strong style="color: var(--color-warning); font-size: 13px;">⚠️ Clé de Secours d'Urgence</strong>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+            Si vous perdez votre appareil ou oubliez votre code PIN, cette clé est votre <strong>seule porte de récupération</strong>. Copiez-la dans vos notes sécurisées.
+          </p>
+          <div class="recovery-key-text" id="displayRecoveryKey">••••-••••-••••-••••</div>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button type="button" class="btn btn-secondary" id="revealRecoveryBtn" style="font-size: 11px;">Afficher</button>
+            <button type="button" class="btn btn-secondary" id="copyRecoveryBtn" style="font-size: 11px;">Copier la clé de secours</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Lier un autre appareil (iPhone) -->
+      <div id="viewPairDevice" class="tab-view" style="display: none;">
+        <p class="settings-intro">
+          Scannez simplement ce <strong>QR Code</strong> avec l'appareil photo de votre iPhone pour ouvrir votre portefeuille en direct.
+        </p>
+
+        <div class="qr-container">
+          <img id="qrCodeImage" class="qr-image" alt="QR Code de synchronisation" src="">
+        </div>
+
+        <div style="text-align: center; margin-bottom: 16px;">
+          <button type="button" class="btn btn-primary" id="copyDirectLinkBtn" style="font-size: 12px;">
+            Copier le lien direct de jumelage 🔗
+          </button>
+        </div>
+
+        <div class="setting-item" style="margin-top: 14px;">
+          <strong style="font-size: 13px;">Vous avez déjà un compte sur un autre appareil ?</strong>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            Collez votre identifiant ou votre clé de secours pour charger votre portefeuille ici :
+          </p>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <input type="text" id="inputExistingId" placeholder="Ex: st_9x4b_7a2 ou REC-..." style="font-size: 13px;">
+            <button type="button" class="btn btn-secondary" id="btnApplyExistingId" style="white-space: nowrap; font-size: 12px;">
+              Charger
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Configuration PIN -->
+      <div id="viewPinSetup" class="tab-view" style="display: none;">
+        <p class="settings-intro">
+          Choisissez un <strong>code PIN à 4 chiffres</strong> pour empêcher quiconque d'accéder à votre portefeuille, même s'il possède votre identifiant.
+        </p>
+
+        <div class="form-group" style="text-align: center;">
+          <label>Nouveau code PIN (4 chiffres)</label>
+          <div class="pin-input-group">
+            <input type="password" maxlength="1" class="pin-digit" id="newPin1" inputmode="numeric">
+            <input type="password" maxlength="1" class="pin-digit" id="newPin2" inputmode="numeric">
+            <input type="password" maxlength="1" class="pin-digit" id="newPin3" inputmode="numeric">
+            <input type="password" maxlength="1" class="pin-digit" id="newPin4" inputmode="numeric">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost-danger" id="btnRemovePin">Supprimer le code PIN</button>
+          <button type="button" class="btn btn-primary" id="btnSaveNewPin">Enregistrer le PIN</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: PIN LOCK SCREEN (VERIFICATION) -->
+  <div class="modal-backdrop" id="lockModal">
+    <div class="modal-content" style="max-width: 400px; text-align: center;">
+      <div style="font-size: 40px; margin-bottom: 10px;">🔒</div>
+      <h2>Portefeuille Verrouillé</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px; margin-bottom: 20px;">
+        Entrez votre code PIN à 4 chiffres pour déverrouiller.
+      </p>
+
+      <div class="pin-input-group">
+        <input type="password" maxlength="1" class="pin-digit" id="unlockPin1" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit" id="unlockPin2" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit" id="unlockPin3" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit" id="unlockPin4" inputmode="numeric">
+      </div>
+
+      <div id="unlockError" style="display: none; color: var(--color-down); font-size: 12px; font-weight: 700; margin-bottom: 12px;">
+        Code PIN incorrect
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button type="button" class="btn btn-secondary" id="btnUseRecoveryKey" style="font-size: 11px;">
+          Code PIN oublié ? Utiliser la clé de secours
+        </button>
       </div>
     </div>
   </div>

@@ -1,20 +1,18 @@
-// --- REVOLUT STOCK TRACKER (SUPABASE CLOUD & LOCAL HYBRID) ---
+// --- REVOLUT STOCK TRACKER (ANONYMOUS CLOUD SYNC & PIN SECURITY) ---
 
 // Supabase Configuration
 const SUPABASE_URL = 'https://qzpwnuaehqfwunenbjxh.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_haY4tLUZ1FeZEwMtpStsjA_zU5bFikW';
-
 let supabaseClient = null;
-let currentUser = null;
 
 // Application State
 let portfolio = null;
 let currentDays = 7;
 let currentSort = 'gain_desc';
 let searchDebounceTimer = null;
-let isGitHubPagesMode = false;
+let isRecoveryRevealed = false;
 
-// Default initial positions for guest / offline mode
+// Default initial positions for first launch
 const DEFAULT_STORAGE = {
   settings: {
     currency: 'EUR',
@@ -82,9 +80,9 @@ const positionsCountTextEl = document.getElementById('positionsCountText');
 // Modals
 const positionModal = document.getElementById('positionModal');
 const settingsModal = document.getElementById('settingsModal');
-const authModal = document.getElementById('authModal');
+const securityModal = document.getElementById('securityModal');
+const lockModal = document.getElementById('lockModal');
 const positionForm = document.getElementById('positionForm');
-const magicLinkForm = document.getElementById('magicLinkForm');
 const autocompleteDropdown = document.getElementById('autocompleteDropdown');
 const posSearchInput = document.getElementById('posSearch');
 
@@ -114,45 +112,80 @@ const formatDayLabel = (dateStr, indexFromEnd) => {
   return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
+// --- HASH HELPER (SHA-256) ---
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str + "_salt_st_2026");
+  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+  const hashArr = Array.from(new Uint8Array(hashBuf));
+  return hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// --- ACCOUNT & IDENTITY MANAGEMENT ---
+
+function getOrCreateAccountId() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const syncParam = urlParams.get('sync') || urlParams.get('link');
+  if (syncParam && syncParam.trim()) {
+    const cleanSync = syncParam.trim();
+    localStorage.setItem('st_account_id', cleanSync);
+    // Clean URL without reload
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return cleanSync;
+  }
+
+  let id = localStorage.getItem('st_account_id');
+  if (!id) {
+    const rnd = Math.random().toString(36).substring(2, 9);
+    const ts = Date.now().toString(36).substring(2, 6);
+    id = `st_${rnd}_${ts}`;
+    localStorage.setItem('st_account_id', id);
+  }
+  return id;
+}
+
+function getOrCreateRecoveryKey() {
+  let key = localStorage.getItem('st_recovery_key');
+  if (!key) {
+    const part = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+    key = `REC-${part()}-${part()}-${part()}`;
+    localStorage.setItem('st_recovery_key', key);
+  }
+  return key;
+}
+
+let CURRENT_ACCOUNT_ID = getOrCreateAccountId();
+let CURRENT_RECOVERY_KEY = getOrCreateRecoveryKey();
+
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   setupEventListeners();
 
-  // Initialize Supabase if available
+  // Initialize Supabase client
   if (window.supabase) {
     try {
       supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      currentUser = session?.user || null;
-      updateAuthUI();
-
-      supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        currentUser = session?.user || null;
-        updateAuthUI();
-        loadPortfolio(true);
-      });
     } catch (e) {
       console.warn('Supabase non initialisé:', e);
     }
   }
 
-  // Detect mode: Check if local backend API exists (if not logged in to Supabase)
-  if (!currentUser) {
-    try {
-      const testRes = await fetch('/api/portfolio', { signal: AbortSignal.timeout(1500) });
-      if (testRes.ok) {
-        isGitHubPagesMode = false;
-      } else {
-        isGitHubPagesMode = true;
-      }
-    } catch (e) {
-      isGitHubPagesMode = true;
-    }
-  }
+  // Check PIN Lock
+  const pinHash = localStorage.getItem('st_pin_hash');
+  const isUnlocked = sessionStorage.getItem('st_session_unlocked') === 'true';
 
-  loadPortfolio();
+  if (pinHash && !isUnlocked) {
+    showLockScreen();
+  } else {
+    initApp();
+  }
 });
+
+async function initApp() {
+  updateSecurityUI();
+  await pullFromCloud();
+  loadPortfolio();
+}
 
 // Setup Events
 function setupEventListeners() {
@@ -178,23 +211,41 @@ function setupEventListeners() {
     renderPositions();
   });
 
-  // Position Modal
+  // Modals
   document.getElementById('addPositionBtn').addEventListener('click', () => openPositionModal());
   document.getElementById('modalCloseBtn').addEventListener('click', () => closePositionModal());
   document.getElementById('modalCancelBtn').addEventListener('click', () => closePositionModal());
 
-  // Settings Modal
   document.getElementById('settingsBtn').addEventListener('click', () => openSettingsModal());
   document.getElementById('settingsCloseBtn').addEventListener('click', () => closeSettingsModal());
   document.getElementById('settingsSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('settingsResetBtn').addEventListener('click', resetSettings);
 
-  // Auth Modal
-  document.getElementById('authBtn').addEventListener('click', openAuthModal);
-  document.getElementById('authCloseBtn').addEventListener('click', closeAuthModal);
-  if (magicLinkForm) magicLinkForm.addEventListener('submit', handleSendMagicLink);
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+  // Security Modal
+  document.getElementById('securityModalBtn').addEventListener('click', openSecurityModal);
+  document.getElementById('securityCloseBtn').addEventListener('click', closeSecurityModal);
+
+  // Security Tabs
+  document.getElementById('tabMyAccountBtn').addEventListener('click', () => switchSecurityTab('myAccount'));
+  document.getElementById('tabPairDeviceBtn').addEventListener('click', () => switchSecurityTab('pairDevice'));
+  document.getElementById('tabPinBtn').addEventListener('click', () => switchSecurityTab('pinSetup'));
+  document.getElementById('openPinSetupBtn').addEventListener('click', () => switchSecurityTab('pinSetup'));
+
+  // Security Actions
+  document.getElementById('copyAccountIdBtn').addEventListener('click', copyAccountId);
+  document.getElementById('revealRecoveryBtn').addEventListener('click', toggleRevealRecovery);
+  document.getElementById('copyRecoveryBtn').addEventListener('click', copyRecoveryKey);
+  document.getElementById('copyDirectLinkBtn').addEventListener('click', copyDirectLink);
+  document.getElementById('btnApplyExistingId').addEventListener('click', applyExistingId);
+
+  // PIN Setup
+  document.getElementById('btnSaveNewPin').addEventListener('click', saveNewPin);
+  document.getElementById('btnRemovePin').addEventListener('click', removePin);
+  setupPinAutoAdvance(['newPin1', 'newPin2', 'newPin3', 'newPin4']);
+
+  // PIN Unlock Screen
+  setupPinAutoAdvance(['unlockPin1', 'unlockPin2', 'unlockPin3', 'unlockPin4'], checkUnlockPin);
+  document.getElementById('btnUseRecoveryKey').addEventListener('click', unlockWithRecoveryKey);
 
   // Export / Import
   const exportBtn = document.getElementById('exportDataBtn');
@@ -244,95 +295,301 @@ function setupEventListeners() {
   positionForm.addEventListener('submit', handleFormSubmit);
 }
 
-// --- AUTHENTICATION & SUPABASE SYNC ---
-
-function updateAuthUI() {
-  const authBtnText = document.getElementById('authBtnText');
-  const authBtnIcon = document.getElementById('authBtnIcon');
-  const loggedOutView = document.getElementById('authLoggedOutView');
-  const loggedInView = document.getElementById('authLoggedInView');
-  const userEmailDisplay = document.getElementById('userEmailDisplay');
-  const userIdDisplay = document.getElementById('userIdDisplay');
-
-  if (currentUser) {
-    const emailShort = currentUser.email ? currentUser.email.split('@')[0] : 'Connectée';
-    if (authBtnText) authBtnText.textContent = emailShort;
-    if (authBtnIcon) authBtnIcon.textContent = '🟢';
-    if (loggedOutView) loggedOutView.style.display = 'none';
-    if (loggedInView) loggedInView.style.display = 'block';
-    if (userEmailDisplay) userEmailDisplay.textContent = currentUser.email || 'Utilisateur Supabase';
-    if (userIdDisplay) userIdDisplay.textContent = `ID: ${currentUser.id.slice(0, 8)}...`;
-  } else {
-    if (authBtnText) authBtnText.textContent = 'Connexion';
-    if (authBtnIcon) authBtnIcon.textContent = '👤';
-    if (loggedOutView) loggedOutView.style.display = 'block';
-    if (loggedInView) loggedInView.style.display = 'none';
-  }
-}
-
-function openAuthModal() {
-  updateAuthUI();
-  const feedback = document.getElementById('authFeedback');
-  if (feedback) feedback.style.display = 'none';
-  authModal.classList.add('active');
-}
-
-function closeAuthModal() {
-  authModal.classList.remove('active');
-}
-
-async function handleSendMagicLink(e) {
-  e.preventDefault();
-  const emailInput = document.getElementById('authEmail');
-  const feedback = document.getElementById('authFeedback');
-  const btn = document.getElementById('sendMagicLinkBtn');
-  const email = emailInput.value.trim();
-
-  if (!email || !supabaseClient) return;
-
-  btn.disabled = true;
-  btn.textContent = 'Envoi en cours...';
-
-  try {
-    const redirectUrl = window.location.origin + window.location.pathname;
-    const { error } = await supabaseClient.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: redirectUrl
+// --- PIN AUTO-ADVANCE HELPER ---
+function setupPinAutoAdvance(ids, onComplete) {
+  ids.forEach((id, idx) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      if (el.value.length === 1 && idx < ids.length - 1) {
+        document.getElementById(ids[idx + 1]).focus();
+      }
+      if (idx === ids.length - 1 && onComplete) {
+        onComplete();
       }
     });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !el.value && idx > 0) {
+        document.getElementById(ids[idx - 1]).focus();
+      }
+    });
+  });
+}
 
-    if (error) throw error;
+// --- LOCK SCREEN & PIN VALIDATION ---
 
-    feedback.style.display = 'block';
-    feedback.style.background = 'var(--color-up-bg)';
-    feedback.style.color = 'var(--color-up)';
-    feedback.style.border = '1px solid var(--color-up-border)';
-    feedback.innerHTML = `✉️ <strong>Lien envoyé avec succès !</strong><br>Vérifiez votre boîte mail (et spams) pour cliquer sur le lien et vous connecter sans mot de passe.`;
-    emailInput.value = '';
+function showLockScreen() {
+  lockModal.classList.add('active');
+  document.getElementById('unlockError').style.display = 'none';
+  ['unlockPin1', 'unlockPin2', 'unlockPin3', 'unlockPin4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  setTimeout(() => {
+    const first = document.getElementById('unlockPin1');
+    if (first) first.focus();
+  }, 100);
+}
+
+async function checkUnlockPin() {
+  const pin = ['unlockPin1', 'unlockPin2', 'unlockPin3', 'unlockPin4']
+    .map(id => document.getElementById(id).value)
+    .join('');
+
+  if (pin.length !== 4) return;
+
+  const enteredHash = await sha256(pin);
+  const storedHash = localStorage.getItem('st_pin_hash');
+
+  if (enteredHash === storedHash) {
+    sessionStorage.setItem('st_session_unlocked', 'true');
+    lockModal.classList.remove('active');
+    initApp();
+  } else {
+    document.getElementById('unlockError').style.display = 'block';
+    ['unlockPin1', 'unlockPin2', 'unlockPin3', 'unlockPin4'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('unlockPin1').focus();
+  }
+}
+
+function unlockWithRecoveryKey() {
+  const key = prompt("Entrez votre clé de secours (ex: REC-XXXX-XXXX-XXXX) :");
+  if (!key) return;
+
+  const cleanKey = key.trim().toUpperCase();
+  if (cleanKey === CURRENT_RECOVERY_KEY.toUpperCase()) {
+    alert("Clé de secours validée ! Le code PIN a été réinitialisé.");
+    localStorage.removeItem('st_pin_hash');
+    sessionStorage.setItem('st_session_unlocked', 'true');
+    lockModal.classList.remove('active');
+    pushToCloud();
+    initApp();
+  } else {
+    alert("Clé de secours incorrecte.");
+  }
+}
+
+// --- SECURITY MODAL & PAIRING UI ---
+
+function updateSecurityUI() {
+  document.getElementById('displayAccountId').textContent = CURRENT_ACCOUNT_ID;
+
+  const pinHash = localStorage.getItem('st_pin_hash');
+  const badge = document.getElementById('pinStatusBadge');
+  const desc = document.getElementById('pinStatusDesc');
+  const statusIcon = document.getElementById('securityStatusIcon');
+
+  if (pinHash) {
+    badge.textContent = "Actif (4 chiffres)";
+    badge.className = "setting-value";
+    desc.textContent = "Votre portefeuille est protégé par un code PIN à 4 chiffres.";
+    if (statusIcon) statusIcon.textContent = "🔒";
+  } else {
+    badge.textContent = "Désactivé";
+    badge.className = "setting-value text-orange";
+    desc.textContent = "Aucun code PIN défini. Accès ouvert sur cet appareil.";
+    if (statusIcon) statusIcon.textContent = "🔓";
+  }
+
+  // Update QR Code & Link
+  const pairUrl = `${window.location.origin}${window.location.pathname}?sync=${encodeURIComponent(CURRENT_ACCOUNT_ID)}`;
+  const qrImg = document.getElementById('qrCodeImage');
+  if (qrImg) {
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(pairUrl)}`;
+  }
+}
+
+function openSecurityModal() {
+  updateSecurityUI();
+  switchSecurityTab('myAccount');
+  securityModal.classList.add('active');
+}
+
+function closeSecurityModal() {
+  securityModal.classList.remove('active');
+}
+
+function switchSecurityTab(tab) {
+  document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('viewMyAccount').style.display = 'none';
+  document.getElementById('viewPairDevice').style.display = 'none';
+  document.getElementById('viewPinSetup').style.display = 'none';
+
+  if (tab === 'myAccount') {
+    document.getElementById('tabMyAccountBtn').classList.add('active');
+    document.getElementById('viewMyAccount').style.display = 'block';
+  } else if (tab === 'pairDevice') {
+    document.getElementById('tabPairDeviceBtn').classList.add('active');
+    document.getElementById('viewPairDevice').style.display = 'block';
+  } else if (tab === 'pinSetup') {
+    document.getElementById('tabPinBtn').classList.add('active');
+    document.getElementById('viewPinSetup').style.display = 'block';
+    setTimeout(() => {
+      const f = document.getElementById('newPin1');
+      if (f) f.focus();
+    }, 100);
+  }
+}
+
+function copyAccountId() {
+  navigator.clipboard.writeText(CURRENT_ACCOUNT_ID).then(() => {
+    alert("Identifiant de compte copié !");
+  });
+}
+
+function toggleRevealRecovery() {
+  const el = document.getElementById('displayRecoveryKey');
+  const btn = document.getElementById('revealRecoveryBtn');
+  if (!isRecoveryRevealed) {
+    el.textContent = CURRENT_RECOVERY_KEY;
+    btn.textContent = "Masquer";
+    isRecoveryRevealed = true;
+  } else {
+    el.textContent = "••••-••••-••••-••••";
+    btn.textContent = "Afficher";
+    isRecoveryRevealed = false;
+  }
+}
+
+function copyRecoveryKey() {
+  navigator.clipboard.writeText(CURRENT_RECOVERY_KEY).then(() => {
+    alert("Clé de secours copiée ! Conservez-la dans vos notes sécurisées.");
+  });
+}
+
+function copyDirectLink() {
+  const pairUrl = `${window.location.origin}${window.location.pathname}?sync=${encodeURIComponent(CURRENT_ACCOUNT_ID)}`;
+  navigator.clipboard.writeText(pairUrl).then(() => {
+    alert("Lien direct de jumelage copié ! Ouvrez-le sur votre iPhone pour lier l'appareil.");
+  });
+}
+
+async function applyExistingId() {
+  const input = document.getElementById('inputExistingId');
+  const val = input.value.trim();
+  if (!val) return;
+
+  if (val.startsWith('REC-')) {
+    // Restore using recovery key
+    CURRENT_RECOVERY_KEY = val;
+    localStorage.setItem('st_recovery_key', val);
+    alert("Clé de secours enregistrée !");
+  } else {
+    CURRENT_ACCOUNT_ID = val;
+    localStorage.setItem('st_account_id', val);
+  }
+
+  closeSecurityModal();
+  sessionStorage.removeItem('st_session_unlocked');
+  await pullFromCloud();
+  loadPortfolio(true);
+}
+
+// PIN Setup Actions
+async function saveNewPin() {
+  const pin = ['newPin1', 'newPin2', 'newPin3', 'newPin4']
+    .map(id => document.getElementById(id).value)
+    .join('');
+
+  if (pin.length !== 4) {
+    alert("Veuillez saisir un code PIN à 4 chiffres.");
+    return;
+  }
+
+  const hash = await sha256(pin);
+  localStorage.setItem('st_pin_hash', hash);
+  sessionStorage.setItem('st_session_unlocked', 'true');
+
+  ['newPin1', 'newPin2', 'newPin3', 'newPin4'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+
+  alert("Code PIN activé avec succès ! Votre portefeuille est maintenant protégé.");
+  updateSecurityUI();
+  switchSecurityTab('myAccount');
+  pushToCloud();
+}
+
+function removePin() {
+  if (!confirm("Voulez-vous vraiment désactiver la protection par code PIN ?")) return;
+  localStorage.removeItem('st_pin_hash');
+  updateSecurityUI();
+  switchSecurityTab('myAccount');
+  pushToCloud();
+}
+
+// --- SUPABASE CLOUD SYNC ENGINE ---
+
+async function pullFromCloud() {
+  if (!supabaseClient) return;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('portfolio_sync')
+      .select('data')
+      .eq('id', CURRENT_ACCOUNT_ID)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Erreur pull cloud Supabase:', error);
+      return;
+    }
+
+    if (data && data.data) {
+      const cloudData = data.data;
+      const local = getLocalData();
+
+      // Merge positions if cloud has positions
+      if (Array.isArray(cloudData.positions)) {
+        local.positions = cloudData.positions;
+      }
+      if (cloudData.settings) {
+        local.settings = cloudData.settings;
+      }
+      if (cloudData.pin_hash && !localStorage.getItem('st_pin_hash')) {
+        localStorage.setItem('st_pin_hash', cloudData.pin_hash);
+      }
+      saveLocalData(local);
+    } else {
+      // First time initialization in cloud
+      await pushToCloud();
+    }
   } catch (err) {
-    feedback.style.display = 'block';
-    feedback.style.background = 'var(--color-down-bg)';
-    feedback.style.color = 'var(--color-down)';
-    feedback.style.border = '1px solid var(--color-down-border)';
-    feedback.innerHTML = `⚠️ <strong>Erreur:</strong> ${escapeHtml(err.message)}`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Envoyer mon lien de connexion ✉️';
+    console.warn('Pull cloud exception:', err);
   }
 }
 
-async function handleLogout() {
-  if (supabaseClient) {
-    await supabaseClient.auth.signOut();
-    currentUser = null;
-    updateAuthUI();
-    closeAuthModal();
-    loadPortfolio(true);
+async function pushToCloud() {
+  if (!supabaseClient) return;
+
+  try {
+    const local = getLocalData();
+    const payload = {
+      positions: local.positions || [],
+      settings: local.settings || DEFAULT_STORAGE.settings,
+      pin_hash: localStorage.getItem('st_pin_hash') || null,
+      recovery_hash: await sha256(CURRENT_RECOVERY_KEY),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+      .from('portfolio_sync')
+      .upsert({
+        id: CURRENT_ACCOUNT_ID,
+        data: payload,
+        updated_at: new Date()
+      });
+
+    if (error) console.warn('Erreur push cloud Supabase:', error);
+  } catch (err) {
+    console.warn('Push cloud exception:', err);
   }
 }
 
-// --- DATA ACCESS LAYER ---
+// --- LOCAL DATA ACCESS ---
 
 function getLocalData() {
   const raw = localStorage.getItem('revolut_tracker_data');
@@ -351,37 +608,8 @@ function saveLocalData(data) {
   localStorage.setItem('revolut_tracker_data', JSON.stringify(data));
 }
 
-// Fetch positions (Supabase if logged in, else LocalStorage)
-async function getStoredPositions() {
-  if (currentUser && supabaseClient) {
-    const { data, error } = await supabaseClient
-      .from('positions')
-      .select('*')
-      .order('created_at', { ascending: false });
+// --- MARKET DATA FETCHERS ---
 
-    if (error) {
-      console.warn('Erreur lecture Supabase:', error);
-      return getLocalData().positions || [];
-    }
-
-    // Map DB fields to application model
-    return (data || []).map(p => ({
-      id: p.id,
-      symbol: p.symbol,
-      name: p.name,
-      buyDate: p.buy_date,
-      buyPrice: parseFloat(p.buy_price) || 0,
-      shares: parseFloat(p.shares) || 0,
-      investedAmount: parseFloat(p.invested_amount) || 0,
-      currency: p.currency || 'EUR',
-      notes: p.notes || ''
-    }));
-  }
-
-  return getLocalData().positions || [];
-}
-
-// Market quotes fetcher (via CORS proxy)
 async function fetchClientChart(symbol) {
   if (clientCache.quotes.has(symbol)) {
     return clientCache.quotes.get(symbol);
@@ -434,7 +662,6 @@ async function fetchClientChart(symbol) {
   return payload;
 }
 
-// Currency rate to EUR
 async function getClientRateToEUR(fromCurrency) {
   const cur = (fromCurrency || 'EUR').toUpperCase();
   if (cur === 'EUR') return 1.0;
@@ -462,7 +689,7 @@ async function getClientRateToEUR(fromCurrency) {
   return fallbacks[cur] || 1.0;
 }
 
-// Suggestions engine
+// Decision Suggestions
 function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecutiveUp, consecutiveDown, settings) {
   const targetProfit = settings.profitTargetPercent ?? 15;
   const stopLoss = settings.stopLossPercent ?? -10;
@@ -530,11 +757,11 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
   };
 }
 
-// Client-side enriched portfolio builder
+// Portfolio Builder
 async function buildPortfolioData() {
   const local = getLocalData();
   const settings = local.settings || {};
-  const positions = await getStoredPositions();
+  const positions = local.positions || [];
 
   const enrichedPositions = [];
   let totalInvestedEur = 0;
@@ -709,13 +936,7 @@ async function loadPortfolio(forceRefresh = false) {
   `;
 
   try {
-    if (currentUser || isGitHubPagesMode) {
-      portfolio = await buildPortfolioData();
-    } else {
-      const res = await fetch(`/api/portfolio${forceRefresh ? '?refresh=true' : ''}`);
-      if (!res.ok) throw new Error('API locale inaccessible');
-      portfolio = await res.json();
-    }
+    portfolio = await buildPortfolioData();
     renderSummary();
     renderPositions();
   } catch (err) {
@@ -983,64 +1204,41 @@ async function handleFormSubmit(e) {
     return;
   }
 
-  try {
-    // If connected to Supabase
-    if (currentUser && supabaseClient) {
-      const { error } = await supabaseClient.from('positions').insert([{
-        user_id: currentUser.id,
-        symbol: symbol.trim().toUpperCase(),
-        name: name || symbol.trim().toUpperCase(),
-        buy_date: buyDate,
-        currency,
-        invested_amount: investedAmount,
-        shares,
-        buy_price: buyPrice,
-        notes
-      }]);
-      if (error) throw error;
-    } else {
-      // LocalStorage mode
-      const newPos = {
-        id: 'pos_' + Date.now(),
-        symbol: symbol.trim().toUpperCase(),
-        name: name || symbol.trim().toUpperCase(),
-        buyDate,
-        currency,
-        investedAmount,
-        shares,
-        buyPrice,
-        notes
-      };
-      const local = getLocalData();
-      local.positions = local.positions || [];
-      local.positions.unshift(newPos);
-      saveLocalData(local);
-    }
+  const newPos = {
+    id: 'pos_' + Date.now(),
+    symbol: symbol.trim().toUpperCase(),
+    name: name || symbol.trim().toUpperCase(),
+    buyDate,
+    currency,
+    investedAmount,
+    shares,
+    buyPrice,
+    notes
+  };
 
-    closePositionModal();
-    loadPortfolio(true);
-  } catch (err) {
-    alert('Erreur enregistrement : ' + err.message);
-  }
+  const local = getLocalData();
+  local.positions = local.positions || [];
+  local.positions.unshift(newPos);
+  saveLocalData(local);
+
+  closePositionModal();
+  loadPortfolio(true);
+
+  // Sync with cloud
+  pushToCloud();
 }
 
 // Delete Position
 window.deletePosition = async function(id, symbol) {
   if (!confirm(`Supprimer la position ${symbol} du portefeuille ?`)) return;
 
-  try {
-    if (currentUser && supabaseClient) {
-      const { error } = await supabaseClient.from('positions').delete().eq('id', id);
-      if (error) throw error;
-    } else {
-      const local = getLocalData();
-      local.positions = (local.positions || []).filter(p => p.id !== id);
-      saveLocalData(local);
-    }
-    loadPortfolio();
-  } catch (err) {
-    alert('Erreur: ' + err.message);
-  }
+  const local = getLocalData();
+  local.positions = (local.positions || []).filter(p => p.id !== id);
+  saveLocalData(local);
+  loadPortfolio();
+
+  // Sync with cloud
+  pushToCloud();
 };
 
 // --- SETTINGS ---
@@ -1083,6 +1281,7 @@ async function saveSettings() {
 
   closeSettingsModal();
   loadPortfolio(true);
+  pushToCloud();
 }
 
 function resetSettings() {
@@ -1123,6 +1322,7 @@ function importData() {
       alert('Positions importées avec succès !');
       closeSettingsModal();
       loadPortfolio(true);
+      pushToCloud();
     } else {
       alert('Format JSON non reconnu.');
     }

@@ -1285,15 +1285,6 @@ async function handleFormSubmit(e) {
   // Sync with cloud
   pushToCloud();
 }
-  local.positions.unshift(newPos);
-  saveLocalData(local);
-
-  closePositionModal();
-  loadPortfolio(true);
-
-  // Sync with cloud
-  pushToCloud();
-}
 
 // Delete Position
 window.deletePosition = async function(id, symbol) {

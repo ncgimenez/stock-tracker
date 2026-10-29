@@ -1,4 +1,11 @@
-// --- REVOLUT STOCK TRACKER (HYBRID: LOCAL SERVER & GITHUB PAGES) ---
+// --- REVOLUT STOCK TRACKER (SUPABASE CLOUD & LOCAL HYBRID) ---
+
+// Supabase Configuration
+const SUPABASE_URL = 'https://qzpwnuaehqfwunenbjxh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_haY4tLUZ1FeZEwMtpStsjA_zU5bFikW';
+
+let supabaseClient = null;
+let currentUser = null;
 
 // Application State
 let portfolio = null;
@@ -7,7 +14,7 @@ let currentSort = 'gain_desc';
 let searchDebounceTimer = null;
 let isGitHubPagesMode = false;
 
-// Default initial positions for first-time launch on GitHub Pages
+// Default initial positions for guest / offline mode
 const DEFAULT_STORAGE = {
   settings: {
     currency: 'EUR',
@@ -55,7 +62,7 @@ const DEFAULT_STORAGE = {
   ]
 };
 
-// In-memory cache for client-side queries
+// In-memory cache for market queries
 const clientCache = {
   quotes: new Map(),
   rates: new Map()
@@ -75,7 +82,9 @@ const positionsCountTextEl = document.getElementById('positionsCountText');
 // Modals
 const positionModal = document.getElementById('positionModal');
 const settingsModal = document.getElementById('settingsModal');
+const authModal = document.getElementById('authModal');
 const positionForm = document.getElementById('positionForm');
+const magicLinkForm = document.getElementById('magicLinkForm');
 const autocompleteDropdown = document.getElementById('autocompleteDropdown');
 const posSearchInput = document.getElementById('posSearch');
 
@@ -110,19 +119,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   setupEventListeners();
 
-  // Detect mode: Check if local backend API exists
-  try {
-    const testRes = await fetch('/api/portfolio', { signal: AbortSignal.timeout(1500) });
-    if (testRes.ok) {
-      isGitHubPagesMode = false;
-      console.log('Mode: Serveur local Node.js actif');
-    } else {
-      isGitHubPagesMode = true;
-      console.log('Mode: Navigateur / GitHub Pages actif (Client-side)');
+  // Initialize Supabase if available
+  if (window.supabase) {
+    try {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      currentUser = session?.user || null;
+      updateAuthUI();
+
+      supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        currentUser = session?.user || null;
+        updateAuthUI();
+        loadPortfolio(true);
+      });
+    } catch (e) {
+      console.warn('Supabase non initialisé:', e);
     }
-  } catch (e) {
-    isGitHubPagesMode = true;
-    console.log('Mode: Navigateur / GitHub Pages actif (Client-side)');
+  }
+
+  // Detect mode: Check if local backend API exists (if not logged in to Supabase)
+  if (!currentUser) {
+    try {
+      const testRes = await fetch('/api/portfolio', { signal: AbortSignal.timeout(1500) });
+      if (testRes.ok) {
+        isGitHubPagesMode = false;
+      } else {
+        isGitHubPagesMode = true;
+      }
+    } catch (e) {
+      isGitHubPagesMode = true;
+    }
   }
 
   loadPortfolio();
@@ -152,14 +178,23 @@ function setupEventListeners() {
     renderPositions();
   });
 
+  // Position Modal
   document.getElementById('addPositionBtn').addEventListener('click', () => openPositionModal());
   document.getElementById('modalCloseBtn').addEventListener('click', () => closePositionModal());
   document.getElementById('modalCancelBtn').addEventListener('click', () => closePositionModal());
 
+  // Settings Modal
   document.getElementById('settingsBtn').addEventListener('click', () => openSettingsModal());
   document.getElementById('settingsCloseBtn').addEventListener('click', () => closeSettingsModal());
   document.getElementById('settingsSaveBtn').addEventListener('click', saveSettings);
   document.getElementById('settingsResetBtn').addEventListener('click', resetSettings);
+
+  // Auth Modal
+  document.getElementById('authBtn').addEventListener('click', openAuthModal);
+  document.getElementById('authCloseBtn').addEventListener('click', closeAuthModal);
+  if (magicLinkForm) magicLinkForm.addEventListener('submit', handleSendMagicLink);
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
   // Export / Import
   const exportBtn = document.getElementById('exportDataBtn');
@@ -167,6 +202,7 @@ function setupEventListeners() {
   const importBtn = document.getElementById('importDataBtn');
   if (importBtn) importBtn.addEventListener('click', importData);
 
+  // Sliders
   const targetProfitRange = document.getElementById('targetProfitRange');
   const stopLossRange = document.getElementById('stopLossRange');
   const downDaysRange = document.getElementById('downDaysRange');
@@ -181,6 +217,7 @@ function setupEventListeners() {
     document.getElementById('downDaysVal').textContent = `${e.target.value} jours`;
   });
 
+  // Autocomplete
   posSearchInput.addEventListener('input', handleSearchInput);
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.search-input-wrapper')) {
@@ -207,7 +244,95 @@ function setupEventListeners() {
   positionForm.addEventListener('submit', handleFormSubmit);
 }
 
-// --- DATA ACCESS LAYER (HYBRID) ---
+// --- AUTHENTICATION & SUPABASE SYNC ---
+
+function updateAuthUI() {
+  const authBtnText = document.getElementById('authBtnText');
+  const authBtnIcon = document.getElementById('authBtnIcon');
+  const loggedOutView = document.getElementById('authLoggedOutView');
+  const loggedInView = document.getElementById('authLoggedInView');
+  const userEmailDisplay = document.getElementById('userEmailDisplay');
+  const userIdDisplay = document.getElementById('userIdDisplay');
+
+  if (currentUser) {
+    const emailShort = currentUser.email ? currentUser.email.split('@')[0] : 'Connectée';
+    if (authBtnText) authBtnText.textContent = emailShort;
+    if (authBtnIcon) authBtnIcon.textContent = '🟢';
+    if (loggedOutView) loggedOutView.style.display = 'none';
+    if (loggedInView) loggedInView.style.display = 'block';
+    if (userEmailDisplay) userEmailDisplay.textContent = currentUser.email || 'Utilisateur Supabase';
+    if (userIdDisplay) userIdDisplay.textContent = `ID: ${currentUser.id.slice(0, 8)}...`;
+  } else {
+    if (authBtnText) authBtnText.textContent = 'Connexion';
+    if (authBtnIcon) authBtnIcon.textContent = '👤';
+    if (loggedOutView) loggedOutView.style.display = 'block';
+    if (loggedInView) loggedInView.style.display = 'none';
+  }
+}
+
+function openAuthModal() {
+  updateAuthUI();
+  const feedback = document.getElementById('authFeedback');
+  if (feedback) feedback.style.display = 'none';
+  authModal.classList.add('active');
+}
+
+function closeAuthModal() {
+  authModal.classList.remove('active');
+}
+
+async function handleSendMagicLink(e) {
+  e.preventDefault();
+  const emailInput = document.getElementById('authEmail');
+  const feedback = document.getElementById('authFeedback');
+  const btn = document.getElementById('sendMagicLinkBtn');
+  const email = emailInput.value.trim();
+
+  if (!email || !supabaseClient) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Envoi en cours...';
+
+  try {
+    const redirectUrl = window.location.origin + window.location.pathname;
+    const { error } = await supabaseClient.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: redirectUrl
+      }
+    });
+
+    if (error) throw error;
+
+    feedback.style.display = 'block';
+    feedback.style.background = 'var(--color-up-bg)';
+    feedback.style.color = 'var(--color-up)';
+    feedback.style.border = '1px solid var(--color-up-border)';
+    feedback.innerHTML = `✉️ <strong>Lien envoyé avec succès !</strong><br>Vérifiez votre boîte mail (et spams) pour cliquer sur le lien et vous connecter sans mot de passe.`;
+    emailInput.value = '';
+  } catch (err) {
+    feedback.style.display = 'block';
+    feedback.style.background = 'var(--color-down-bg)';
+    feedback.style.color = 'var(--color-down)';
+    feedback.style.border = '1px solid var(--color-down-border)';
+    feedback.innerHTML = `⚠️ <strong>Erreur:</strong> ${escapeHtml(err.message)}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer mon lien de connexion ✉️';
+  }
+}
+
+async function handleLogout() {
+  if (supabaseClient) {
+    await supabaseClient.auth.signOut();
+    currentUser = null;
+    updateAuthUI();
+    closeAuthModal();
+    loadPortfolio(true);
+  }
+}
+
+// --- DATA ACCESS LAYER ---
 
 function getLocalData() {
   const raw = localStorage.getItem('revolut_tracker_data');
@@ -226,7 +351,37 @@ function saveLocalData(data) {
   localStorage.setItem('revolut_tracker_data', JSON.stringify(data));
 }
 
-// Client-side Yahoo Finance fetcher using CORS-enabled proxy
+// Fetch positions (Supabase if logged in, else LocalStorage)
+async function getStoredPositions() {
+  if (currentUser && supabaseClient) {
+    const { data, error } = await supabaseClient
+      .from('positions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Erreur lecture Supabase:', error);
+      return getLocalData().positions || [];
+    }
+
+    // Map DB fields to application model
+    return (data || []).map(p => ({
+      id: p.id,
+      symbol: p.symbol,
+      name: p.name,
+      buyDate: p.buy_date,
+      buyPrice: parseFloat(p.buy_price) || 0,
+      shares: parseFloat(p.shares) || 0,
+      investedAmount: parseFloat(p.invested_amount) || 0,
+      currency: p.currency || 'EUR',
+      notes: p.notes || ''
+    }));
+  }
+
+  return getLocalData().positions || [];
+}
+
+// Market quotes fetcher (via CORS proxy)
 async function fetchClientChart(symbol) {
   if (clientCache.quotes.has(symbol)) {
     return clientCache.quotes.get(symbol);
@@ -279,7 +434,7 @@ async function fetchClientChart(symbol) {
   return payload;
 }
 
-// Client-side Currency rate to EUR
+// Currency rate to EUR
 async function getClientRateToEUR(fromCurrency) {
   const cur = (fromCurrency || 'EUR').toUpperCase();
   if (cur === 'EUR') return 1.0;
@@ -300,7 +455,7 @@ async function getClientRateToEUR(fromCurrency) {
       return curToEur;
     }
   } catch (e) {
-    console.warn(`Taux live non disponible pour ${cur}, estimation standard.`);
+    console.warn(`Taux live non disponible pour ${cur}`);
   }
 
   const fallbacks = { USD: 0.92, GBP: 1.18, CHF: 1.05 };
@@ -376,10 +531,10 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
 }
 
 // Client-side enriched portfolio builder
-async function buildClientPortfolio() {
+async function buildPortfolioData() {
   const local = getLocalData();
   const settings = local.settings || {};
-  const positions = local.positions || [];
+  const positions = await getStoredPositions();
 
   const enrichedPositions = [];
   let totalInvestedEur = 0;
@@ -554,8 +709,8 @@ async function loadPortfolio(forceRefresh = false) {
   `;
 
   try {
-    if (isGitHubPagesMode) {
-      portfolio = await buildClientPortfolio();
+    if (currentUser || isGitHubPagesMode) {
+      portfolio = await buildPortfolioData();
     } else {
       const res = await fetch(`/api/portfolio${forceRefresh ? '?refresh=true' : ''}`);
       if (!res.ok) throw new Error('API locale inaccessible');
@@ -564,12 +719,6 @@ async function loadPortfolio(forceRefresh = false) {
     renderSummary();
     renderPositions();
   } catch (err) {
-    if (!isGitHubPagesMode) {
-      console.warn('Bascule automatique en mode Client / GitHub Pages');
-      isGitHubPagesMode = true;
-      loadPortfolio(forceRefresh);
-      return;
-    }
     positionsContainer.innerHTML = `
       <div class="empty-state">
         <p>Impossible de charger le portefeuille : ${err.message}</p>
@@ -763,21 +912,15 @@ function handleSearchInput(e) {
 
   searchDebounceTimer = setTimeout(async () => {
     try {
-      let results = [];
-      if (isGitHubPagesMode) {
-        const targetUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=6&newsCount=0`;
-        const proxyUrl = `https://proxy.cors.dev/${targetUrl}`;
-        const res = await fetch(proxyUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const data = await res.json();
-        results = (data.quotes || []).map(item => ({
-          symbol: item.symbol,
-          name: item.shortname || item.longname || item.symbol,
-          type: item.quoteType
-        }));
-      } else {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        results = await res.json();
-      }
+      const targetUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=6&newsCount=0`;
+      const proxyUrl = `https://proxy.cors.dev/${targetUrl}`;
+      const res = await fetch(proxyUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const data = await res.json();
+      const results = (data.quotes || []).map(item => ({
+        symbol: item.symbol,
+        name: item.shortname || item.longname || item.symbol,
+        type: item.quoteType
+      }));
 
       if (!results || results.length === 0) {
         autocompleteDropdown.innerHTML = `<div class="autocomplete-item"><span class="item-name">Aucun résultat trouvé</span></div>`;
@@ -840,36 +983,44 @@ async function handleFormSubmit(e) {
     return;
   }
 
-  const newPos = {
-    id: 'pos_' + Date.now(),
-    symbol: symbol.trim().toUpperCase(),
-    name: name || symbol.trim().toUpperCase(),
-    buyDate,
-    currency,
-    investedAmount,
-    shares,
-    buyPrice,
-    notes
-  };
-
   try {
-    if (isGitHubPagesMode) {
+    // If connected to Supabase
+    if (currentUser && supabaseClient) {
+      const { error } = await supabaseClient.from('positions').insert([{
+        user_id: currentUser.id,
+        symbol: symbol.trim().toUpperCase(),
+        name: name || symbol.trim().toUpperCase(),
+        buy_date: buyDate,
+        currency,
+        invested_amount: investedAmount,
+        shares,
+        buy_price: buyPrice,
+        notes
+      }]);
+      if (error) throw error;
+    } else {
+      // LocalStorage mode
+      const newPos = {
+        id: 'pos_' + Date.now(),
+        symbol: symbol.trim().toUpperCase(),
+        name: name || symbol.trim().toUpperCase(),
+        buyDate,
+        currency,
+        investedAmount,
+        shares,
+        buyPrice,
+        notes
+      };
       const local = getLocalData();
       local.positions = local.positions || [];
       local.positions.unshift(newPos);
       saveLocalData(local);
-    } else {
-      const res = await fetch('/api/positions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newPos)
-      });
-      if (!res.ok) throw new Error('Erreur API');
     }
+
     closePositionModal();
     loadPortfolio(true);
   } catch (err) {
-    alert('Erreur: ' + err.message);
+    alert('Erreur enregistrement : ' + err.message);
   }
 }
 
@@ -878,13 +1029,13 @@ window.deletePosition = async function(id, symbol) {
   if (!confirm(`Supprimer la position ${symbol} du portefeuille ?`)) return;
 
   try {
-    if (isGitHubPagesMode) {
+    if (currentUser && supabaseClient) {
+      const { error } = await supabaseClient.from('positions').delete().eq('id', id);
+      if (error) throw error;
+    } else {
       const local = getLocalData();
       local.positions = (local.positions || []).filter(p => p.id !== id);
       saveLocalData(local);
-    } else {
-      const res = await fetch(`/api/positions/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Erreur de suppression');
     }
     loadPortfolio();
   } catch (err) {
@@ -895,14 +1046,7 @@ window.deletePosition = async function(id, symbol) {
 // --- SETTINGS ---
 async function openSettingsModal() {
   try {
-    let settings = {};
-    if (isGitHubPagesMode) {
-      settings = getLocalData().settings || {};
-    } else {
-      const res = await fetch('/api/settings');
-      settings = await res.json();
-    }
-
+    const settings = getLocalData().settings || {};
     const profit = settings.profitTargetPercent ?? 15;
     const stopLoss = settings.stopLossPercent ?? -10;
     const downDays = settings.consecutiveDownDaysAlert ?? 3;
@@ -933,24 +1077,12 @@ async function saveSettings() {
     consecutiveDownDaysAlert: parseInt(document.getElementById('downDaysRange').value, 10)
   };
 
-  try {
-    if (isGitHubPagesMode) {
-      const local = getLocalData();
-      local.settings = { ...local.settings, ...payload };
-      saveLocalData(local);
-    } else {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('Erreur');
-    }
-    closeSettingsModal();
-    loadPortfolio(true);
-  } catch (err) {
-    alert('Erreur lors de l\'enregistrement des critères');
-  }
+  const local = getLocalData();
+  local.settings = { ...local.settings, ...payload };
+  saveLocalData(local);
+
+  closeSettingsModal();
+  loadPortfolio(true);
 }
 
 function resetSettings() {
@@ -966,7 +1098,7 @@ function resetSettings() {
 
 // Export / Import
 function exportData() {
-  const data = isGitHubPagesMode ? getLocalData() : { positions: portfolio?.positions || [] };
+  const data = { positions: portfolio?.positions || [] };
   const jsonStr = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

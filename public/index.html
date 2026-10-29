@@ -7,6 +7,7 @@
   <meta name="description" content="Suivi d'actions et cryptos Revolut sans graphiques. Dynamique jour par jour et suggestions d'action (Acheter / Garder / Vendre).">
   <link rel="stylesheet" href="./css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="app-container">
@@ -19,6 +20,10 @@
         <p class="brand-subtitle">Progression jour par jour • Zéro graphique inutile • Aide à la décision</p>
       </div>
       <div class="header-actions">
+        <button id="authBtn" class="btn btn-secondary" title="Compte et synchronisation">
+          <span id="authBtnIcon">👤</span>
+          <span id="authBtnText">Connexion</span>
+        </button>
         <button id="themeToggleBtn" class="btn btn-secondary icon-btn" title="Changer le thème">
           <span class="theme-icon">🌙</span>
         </button>
@@ -250,6 +255,64 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" id="settingsResetBtn">Valeurs par défaut</button>
           <button type="button" class="btn btn-primary" id="settingsSaveBtn">Enregistrer les critères</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AUTHENTICATION / SUPABASE -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="authModalTitle">Synchronisation & Compte</h2>
+        <button class="modal-close" id="authCloseBtn">&times;</button>
+      </div>
+
+      <!-- Logged out view -->
+      <div id="authLoggedOutView">
+        <p class="settings-intro">
+          Connectez-vous <strong>sans mot de passe</strong> pour synchroniser automatiquement vos investissements Revolut entre votre Mac, votre iPhone et tous vos appareils.
+        </p>
+
+        <form id="magicLinkForm">
+          <div class="form-group">
+            <label for="authEmail">Votre adresse e-mail</label>
+            <input type="email" id="authEmail" placeholder="votre.email@exemple.com" required>
+            <small class="form-hint">Vous recevrez un lien de connexion instantané (zéro mot de passe à retenir).</small>
+          </div>
+
+          <div id="authFeedback" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 13px;"></div>
+
+          <div class="modal-footer" style="padding-top: 14px;">
+            <button type="submit" class="btn btn-primary" id="sendMagicLinkBtn" style="width: 100%; justify-content: center;">
+              Envoyer mon lien de connexion ✉️
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Logged in view -->
+      <div id="authLoggedInView" style="display: none;">
+        <div style="background: var(--card-sub-bg); padding: 16px; border-radius: 10px; border: 1px solid var(--card-border); margin-bottom: 20px;">
+          <div style="font-size: 11px; font-weight: 700; color: var(--color-up); text-transform: uppercase; margin-bottom: 6px;">
+            ● Connectée & Données synchronisées
+          </div>
+          <div style="font-size: 15px; font-weight: 700; color: var(--text-main);" id="userEmailDisplay">
+            —
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="userIdDisplay">
+            ID: —
+          </div>
+        </div>
+
+        <p class="settings-intro">
+          Vos positions sont sécurisées et synchronisées avec votre base de données Supabase personnelle.
+        </p>
+
+        <div class="modal-footer" style="padding-top: 14px;">
+          <button type="button" class="btn btn-ghost-danger" id="logoutBtn" style="width: 100%; justify-content: center; padding: 10px;">
+            Se déconnecter
+          </button>
         </div>
       </div>
     </div>

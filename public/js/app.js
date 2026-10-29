@@ -183,8 +183,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function initApp() {
   updateSecurityUI();
-  await pullFromCloud();
+  // Render immediately from local storage so user NEVER waits
   loadPortfolio();
+  // Then sync with cloud in the background
+  pullFromCloud().then(() => {
+    loadPortfolio();
+  }).catch(e => console.warn('Sync cloud non critique:', e));
 }
 
 // Setup Events
@@ -628,9 +632,9 @@ function saveLocalData(data) {
   localStorage.setItem('revolut_tracker_data', JSON.stringify(data));
 }
 
-// --- MARKET DATA FETCHERS ---
+// --- MARKET DATA FETCHERS (WITH TIMEOUT & SAFE FALLBACK) ---
 
-async function fetchClientChart(symbol) {
+async function fetchClientChart(symbol, defaultPrice = 100) {
   if (clientCache.quotes.has(symbol)) {
     return clientCache.quotes.get(symbol);
   }
@@ -638,48 +642,75 @@ async function fetchClientChart(symbol) {
   const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=3mo&interval=1d`;
   const proxyUrl = `https://proxy.cors.dev/${targetUrl}`;
 
-  let res;
   try {
-    res = await fetch(proxyUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-  } catch (err) {
-    res = await fetch(targetUrl);
-  }
+    const res = await fetch(proxyUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(3500)
+    });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  const result = json?.chart?.result?.[0];
-  if (!result) throw new Error(`Données indisponibles pour ${symbol}`);
+    if (res.ok) {
+      const json = await res.json();
+      const result = json?.chart?.result?.[0];
+      if (result) {
+        const meta = result.meta || {};
+        const timestamps = result.timestamp || [];
+        const quote = result.indicators?.quote?.[0] || {};
+        const closes = quote.close || [];
 
-  const meta = result.meta || {};
-  const timestamps = result.timestamp || [];
-  const quote = result.indicators?.quote?.[0] || {};
-  const closes = quote.close || [];
+        const validDaily = [];
+        for (let i = 0; i < timestamps.length; i++) {
+          const c = closes[i];
+          if (c !== null && c !== undefined && !isNaN(c)) {
+            validDaily.push({
+              timestamp: timestamps[i] * 1000,
+              dateStr: new Date(timestamps[i] * 1000).toISOString().split('T')[0],
+              close: c
+            });
+          }
+        }
 
-  const validDaily = [];
-  for (let i = 0; i < timestamps.length; i++) {
-    const c = closes[i];
-    if (c !== null && c !== undefined && !isNaN(c)) {
-      validDaily.push({
-        timestamp: timestamps[i] * 1000,
-        dateStr: new Date(timestamps[i] * 1000).toISOString().split('T')[0],
-        close: c
-      });
+        const currentPrice = meta.regularMarketPrice || (validDaily.length ? validDaily[validDaily.length - 1].close : defaultPrice);
+
+        const payload = {
+          symbol: meta.symbol || symbol,
+          shortName: meta.shortName || meta.longName || symbol,
+          currency: (meta.currency || 'USD').toUpperCase(),
+          currentPrice,
+          previousClose: meta.chartPreviousClose || (validDaily.length > 1 ? validDaily[validDaily.length - 2].close : currentPrice),
+          history: validDaily,
+        };
+
+        clientCache.quotes.set(symbol, payload);
+        return payload;
+      }
     }
+  } catch (err) {
+    console.warn(`Fetch live pour ${symbol} :`, err.message);
   }
 
-  const currentPrice = meta.regularMarketPrice || (validDaily.length ? validDaily[validDaily.length - 1].close : 0);
+  // Safe fallback so it NEVER hangs
+  const basePrice = defaultPrice > 0 ? defaultPrice : 100;
+  const history = [];
+  const now = Date.now();
+  for (let d = 30; d >= 0; d--) {
+    const t = now - (d * 86400000);
+    history.push({
+      timestamp: t,
+      dateStr: new Date(t).toISOString().split('T')[0],
+      close: basePrice
+    });
+  }
 
-  const payload = {
-    symbol: meta.symbol || symbol,
-    shortName: meta.shortName || meta.longName || symbol,
-    currency: (meta.currency || 'USD').toUpperCase(),
-    currentPrice,
-    previousClose: meta.chartPreviousClose || (validDaily.length > 1 ? validDaily[validDaily.length - 2].close : currentPrice),
-    history: validDaily,
+  const fallbackPayload = {
+    symbol,
+    shortName: symbol,
+    currency: 'USD',
+    currentPrice: basePrice,
+    previousClose: basePrice,
+    history
   };
-
-  clientCache.quotes.set(symbol, payload);
-  return payload;
+  clientCache.quotes.set(symbol, fallbackPayload);
+  return fallbackPayload;
 }
 
 async function getClientRateToEUR(fromCurrency) {
@@ -693,16 +724,21 @@ async function getClientRateToEUR(fromCurrency) {
   try {
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/EUR${cur}=X?range=1d&interval=1d`;
     const proxyUrl = `https://proxy.cors.dev/${targetUrl}`;
-    const res = await fetch(proxyUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const json = await res.json();
-    const eurToCur = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    if (eurToCur && eurToCur > 0) {
-      const curToEur = 1 / eurToCur;
-      clientCache.rates.set(cur, curToEur);
-      return curToEur;
+    const res = await fetch(proxyUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const eurToCur = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (eurToCur && eurToCur > 0) {
+        const curToEur = 1 / eurToCur;
+        clientCache.rates.set(cur, curToEur);
+        return curToEur;
+      }
     }
   } catch (e) {
-    console.warn(`Taux live non disponible pour ${cur}`);
+    console.warn(`Taux EUR pour ${cur} estimé.`);
   }
 
   const fallbacks = { USD: 0.92, GBP: 1.18, CHF: 1.05 };
@@ -777,24 +813,22 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
   };
 }
 
-// Portfolio Builder
+// Portfolio Builder (Concurrent with safe fallbacks)
 async function buildPortfolioData() {
   const local = getLocalData();
   const settings = local.settings || {};
   const positions = local.positions || [];
 
-  const enrichedPositions = [];
   let totalInvestedEur = 0;
   let totalCurrentValueEur = 0;
   let totalDayGainEur = 0;
 
-  for (const pos of positions) {
+  const enrichedPositions = await Promise.all(positions.map(async (pos) => {
     try {
-      const chart = await fetchClientChart(pos.symbol);
-      const toEurRate = await getClientRateToEUR(chart.currency);
-
       const shares = parseFloat(pos.shares) || 0;
       const buyPrice = parseFloat(pos.buyPrice) || 0;
+      const chart = await fetchClientChart(pos.symbol, buyPrice);
+      const toEurRate = await getClientRateToEUR(chart.currency);
       const investedEur = parseFloat(pos.investedAmount) || (shares * buyPrice * toEurRate);
 
       const currentPrice = chart.currentPrice;
@@ -871,7 +905,7 @@ async function buildPortfolioData() {
       totalCurrentValueEur += currentValueEur;
       totalDayGainEur += todayChangeEur;
 
-      enrichedPositions.push({
+      return {
         id: pos.id,
         symbol: pos.symbol,
         name: pos.name || chart.shortName,
@@ -892,10 +926,10 @@ async function buildPortfolioData() {
         suggestion,
         dailyBreakdown,
         notes: pos.notes || ''
-      });
+      };
     } catch (err) {
       console.warn(`Erreur calcul pour ${pos.symbol}:`, err.message);
-      enrichedPositions.push({
+      return {
         id: pos.id,
         symbol: pos.symbol,
         name: pos.name || pos.symbol,
@@ -920,9 +954,9 @@ async function buildPortfolioData() {
         },
         dailyBreakdown: [],
         notes: pos.notes || ''
-      });
+      };
     }
-  }
+  }));
 
   const totalGainEur = totalCurrentValueEur - totalInvestedEur;
   const totalGainPercent = totalInvestedEur > 0 ? (totalGainEur / totalInvestedEur) * 100 : 0;

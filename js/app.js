@@ -149,6 +149,8 @@ const I18N = {
     sugStopLoss: "Stop-Loss / Couper",
     sugWarningDip: "Alerte baisse ({n}j)",
     sugOpportunity: "Opportunité / Renforcer",
+    sugBreakStructure: "⚠️ Rupture de creux (Vendre / Sécuriser)",
+    sugNearHigh: "🚀 Sur les sommets (Garder)",
     sugPending: "⚠️ Données en attente",
     sugPendingReason: "Cours en attente de synchronisation. Cliquez sur \"Modifier\" pour ajuster le symbole ou le montant.",
     // Form & Modals
@@ -171,10 +173,19 @@ const I18N = {
     sharesHint: "Fraction exacte avec toutes les décimales.",
     priceLabel: "Prix d'achat unitaire (estimé)",
     pricePlaceholder: "Calculé automatiquement",
+    buyFeeLabel: "Frais payés à l'achat ({cur})",
+    sellFeeLabel: "Frais de vente estimés ({cur})",
     notesLabel: "Note personnelle (facultatif)",
     notesPlaceholder: "Ex: Achat mensuel DCA, conviction perso...",
     btnCancel: "Annuler",
     btnSavePosition: "Enregistrer l'achat",
+    netGain: "Gain Net (après frais)",
+    grossGain: "Gain Brut",
+    totalFeesLabel: "Frais totaux : ",
+    afterFees: "après frais",
+    highPeak: "Sommet (30j)",
+    keySupport: "Support clé",
+    distanceFromHigh: "du sommet",
     // Settings
     settingsTitle: "Critères de Recommandation",
     settingsProfitTarget: "Objectif de prise de bénéfices (Gain global)",
@@ -247,6 +258,8 @@ const I18N = {
     sugStopLoss: "Stop-Loss / Cut",
     sugWarningDip: "Warning: Drop ({n} days)",
     sugOpportunity: "Buy the Dip",
+    sugBreakStructure: "⚠️ Break of Support (Sell / Secure)",
+    sugNearHigh: "🚀 Near Peak High (Hold)",
     sugPending: "⚠️ Data Pending",
     sugPendingReason: "Live quotes pending synchronization. Click \"Edit\" to adjust symbol or amount anytime.",
     // Form & Modals
@@ -269,10 +282,19 @@ const I18N = {
     sharesHint: "Exact fraction with all decimals.",
     priceLabel: "Estimated Buy Price",
     pricePlaceholder: "Calculated automatically",
+    buyFeeLabel: "Buy fees paid ({cur})",
+    sellFeeLabel: "Est. sell fees ({cur})",
     notesLabel: "Personal notes (optional)",
     notesPlaceholder: "Ex: Monthly DCA purchase, conviction...",
     btnCancel: "Cancel",
     btnSavePosition: "Save Purchase",
+    netGain: "Net Gain (after fees)",
+    grossGain: "Gross Gain",
+    totalFeesLabel: "Total fees: ",
+    afterFees: "after fees",
+    highPeak: "High (30d)",
+    keySupport: "Key support",
+    distanceFromHigh: "from high",
     // Settings
     settingsTitle: "Recommendation Rules",
     settingsProfitTarget: "Profit taking target (Total gain)",
@@ -455,10 +477,18 @@ function setLanguage(lang) {
 
 function updateCurrencyLabels() {
   const cur = (document.getElementById("posCurrency")?.value || "EUR").toUpperCase();
+  const symbol = cur === "USD" ? "$ USD" : (cur === "GBP" ? "£ GBP" : "€ EUR");
   const label = document.getElementById("investedAmountLabel");
   if (label) {
-    const symbol = cur === "USD" ? "$ USD" : (cur === "GBP" ? "£ GBP" : "€ EUR");
     label.textContent = t("investedAmountLabel", { cur: symbol });
+  }
+  const buyFeeLabel = document.getElementById("buyFeeLabel");
+  if (buyFeeLabel) {
+    buyFeeLabel.textContent = t("buyFeeLabel", { cur: symbol });
+  }
+  const sellFeeLabel = document.getElementById("sellFeeLabel");
+  if (sellFeeLabel) {
+    sellFeeLabel.textContent = t("sellFeeLabel", { cur: symbol });
   }
 }
 
@@ -587,6 +617,20 @@ function setupEventListeners() {
   const currencySelect = document.getElementById("posCurrency");
   if (currencySelect) {
     currencySelect.addEventListener("change", updateCurrencyLabels);
+  }
+
+  const buyFeeInput = document.getElementById("posBuyFee");
+  const sellFeeInput = document.getElementById("posSellFee");
+  if (buyFeeInput && sellFeeInput) {
+    buyFeeInput.addEventListener("input", () => {
+      if (!sellFeeInput.value || sellFeeInput.dataset.autoFilled === "true") {
+        sellFeeInput.value = buyFeeInput.value;
+        sellFeeInput.dataset.autoFilled = "true";
+      }
+    });
+    sellFeeInput.addEventListener("input", () => {
+      sellFeeInput.dataset.autoFilled = "false";
+    });
   }
 
   document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
@@ -1154,12 +1198,22 @@ async function getClientRateToEUR(fromCurrency) {
   return fallbacks[cur] || 1.0;
 }
 
-// Decision Suggestions
-function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecutiveUp, consecutiveDown, settings) {
+// Decision Suggestions (incorporates Profit/Loss rules & Market Structure Highs/Lows)
+function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecutiveUp, consecutiveDown, settings, structure = {}) {
   const targetProfit = settings.profitTargetPercent ?? 15;
   const stopLoss = settings.stopLossPercent ?? -10;
   const downAlertDays = settings.consecutiveDownDaysAlert ?? 3;
 
+  const {
+    isBreakOfStructure = false,
+    isNearHigh = false,
+    distanceFromHighPct = 0,
+    recentSwingLow = 0,
+    highestClose = 0,
+    currency = "EUR"
+  } = structure;
+
+  // 1. Hard Stop-Loss reached
   if (totalGainPercent <= stopLoss) {
     return {
       action: "SELL_STOP_LOSS",
@@ -1171,15 +1225,40 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
     };
   }
 
+  // 2. Break of Structure (Price broke below key support swing low - Objective Exit)
+  if (isBreakOfStructure && recentSwingLow > 0) {
+    const formattedLow = formatCurrency(recentSwingLow, currency);
+    if (totalGainPercent > 0) {
+      return {
+        action: "SELL_BREAKDOWN",
+        label: t("sugBreakStructure"),
+        badgeClass: "badge-danger",
+        reason: currentLang === "en"
+          ? `Break of Structure: Price broke below key support (${formattedLow}). Uptrend is broken: objective signal to secure profits without emotion.`
+          : `Rupture de structure : le cours a cassé son creux de support (${formattedLow}). La dynamique haussière est brisée : signal objectif pour sécuriser vos gains sans émotion.`
+      };
+    } else {
+      return {
+        action: "SELL_STOP_LOSS",
+        label: t("sugBreakStructure"),
+        badgeClass: "badge-danger",
+        reason: currentLang === "en"
+          ? `Support breakdown below ${formattedLow}. Downtrend confirmed: consider exiting without emotion.`
+          : `Cassure du creux de support sous ${formattedLow}. Tendance baissière confirmée : signal objectif pour couper.`
+      };
+    }
+  }
+
+  // 3. Profit target reached
   if (totalGainPercent >= targetProfit) {
-    if (consecutiveDown >= 1 || todayChangePercent < -1.0) {
+    if (consecutiveDown >= 1 || todayChangePercent < -1.0 || distanceFromHighPct < -4.0) {
       return {
         action: "TAKE_PROFIT",
         label: t("sugTakeProfit"),
         badgeClass: "badge-warning",
         reason: currentLang === "en"
-          ? `Profit target met (+${totalGainPercent.toFixed(1)}% vs target +${targetProfit}%) with recent pullback. Ideal timing to secure profits.`
-          : `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}% vs cible +${targetProfit}%) et repli récent. Excellent timing pour sécuriser tout ou partie des gains.`
+          ? `Profit target met (+${totalGainPercent.toFixed(1)}%) with pullback (${distanceFromHighPct.toFixed(1)}% from peak). Optimal timing to secure profits.`
+          : `Objectif de gain atteint (+${totalGainPercent.toFixed(1)}%) et repli (${distanceFromHighPct.toFixed(1)}% sous le sommet). Excellent timing pour encaisser.`
       };
     } else {
       return {
@@ -1187,23 +1266,37 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
         label: t("sugTargetReached"),
         badgeClass: "badge-gold",
         reason: currentLang === "en"
-          ? `Outstanding performance (+${totalGainPercent.toFixed(1)}%). Target (+${targetProfit}%) exceeded. Prepare to secure on first signs of exhaustion.`
-          : `Superbe performance (+${totalGainPercent.toFixed(1)}%). Objectif (+${targetProfit}%) dépassé. Préparez-vous à sécuriser au premier essoufflement.`
+          ? `Target reached (+${totalGainPercent.toFixed(1)}%). Trading near highs. Prepare to secure if support breaks.`
+          : `Objectif dépassé (+${totalGainPercent.toFixed(1)}%). Très forte dynamique. Prêt à sécuriser si le dernier creux lâche.`
       };
     }
   }
 
+  // 4. Sitting right at / near High (Very Bullish)
+  if (isNearHigh && consecutiveUp >= 1 && totalGainPercent > 3) {
+    return {
+      action: "HOLD_AT_HIGH",
+      label: t("sugNearHigh"),
+      badgeClass: "badge-success",
+      reason: currentLang === "en"
+        ? `Trading near peak (${formatCurrency(highestClose, currency)}). Uptrend structure is pristine (higher highs & lows). Hold firmly.`
+        : `Sur les sommets (${formatCurrency(highestClose, currency)}). Structure haussière intacte (creux et sommets montants). Gardez fermement.`
+    };
+  }
+
+  // 5. Consecutive downtrend alert
   if (consecutiveDown >= downAlertDays) {
     return {
       action: "WATCH_DOWNTREND",
       label: t("sugWarningDip", { n: consecutiveDown }),
       badgeClass: "badge-orange",
       reason: currentLang === "en"
-        ? `${consecutiveDown} consecutive down days. Gains are fading day by day: watch closely.`
-        : `${consecutiveDown} séances consécutives de baisse. Vos gains s'effritent de jour en jour : surveillez attentivement.`
+        ? `${consecutiveDown} consecutive down days. Gains are fading day by day: watch support closely.`
+        : `${consecutiveDown} séances consécutives de baisse. Vos gains s'effritent de jour en jour : surveillez attentivement le support.`
     };
   }
 
+  // 6. Healthy Dip in uptrend
   if (totalGainPercent > 3 && consecutiveDown >= 2 && todayChangePercent < -2.0) {
     return {
       action: "BUY_DIP",
@@ -1231,8 +1324,8 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
     label: t("sugHold"),
     badgeClass: "badge-neutral",
     reason: currentLang === "en"
-      ? `Neutral or stable trend. No risk alerts triggered, hold position.`
-      : `Tendance neutre ou stable. Aucune alerte déclenchée, conservez la position.`
+      ? `Neutral or stable trend above key support. No risk alerts triggered, hold position.`
+      : `Tendance neutre ou stable au-dessus du support. Aucune alerte déclenchée, conservez sereinement.`
   };
 }
 
@@ -1266,6 +1359,13 @@ async function buildPortfolioData() {
       const currentValueNative = shares * currentPriceInPosCurrency;
       const totalGainNative = currentValueNative - investedNative;
       const totalGainPercent = investedNative > 0 ? (totalGainNative / investedNative) * 100 : 0;
+
+      // Fees (buy fee paid & estimated sell fee)
+      const buyFee = pos.buyFee !== undefined ? (parseFloat(pos.buyFee) || 0) : (pos.symbol === "SPCX" ? 1.17 : 0);
+      const sellFee = pos.sellFee !== undefined ? (parseFloat(pos.sellFee) || 0) : buyFee;
+      const totalFeesNative = buyFee + sellFee;
+      const netGainNative = totalGainNative - totalFeesNative;
+      const netGainPercent = investedNative > 0 ? (netGainNative / investedNative) * 100 : 0;
 
       const fullHistory = chart.history || [];
       const daysCount = Math.min(fullHistory.length, 30);
@@ -1326,18 +1426,61 @@ async function buildPortfolioData() {
       const todayChangePercent = lastDay.changePct || 0;
       const todayChangeNative = (lastDay.changeVal || 0) * shares;
 
+      // Market Structure Analysis (Highs, Lows, Swing Supports)
+      let highestClose = 0;
+      let lowestClose = Infinity;
+      let recentSwingLow = Infinity;
+      let recentSwingHigh = 0;
+
+      if (dailyBreakdown.length > 0) {
+        for (let i = 0; i < dailyBreakdown.length; i++) {
+          const c = dailyBreakdown[i].close;
+          if (c > highestClose) highestClose = c;
+          if (c < lowestClose) lowestClose = c;
+        }
+
+        for (let i = 1; i < dailyBreakdown.length - 1; i++) {
+          const prev = dailyBreakdown[i - 1].close;
+          const curr = dailyBreakdown[i].close;
+          const next = dailyBreakdown[i + 1].close;
+          if (curr <= prev && curr <= next) {
+            recentSwingLow = curr;
+          }
+          if (curr >= prev && curr >= next) {
+            recentSwingHigh = curr;
+          }
+        }
+      }
+      if (recentSwingLow === Infinity) recentSwingLow = lowestClose;
+      if (recentSwingHigh === 0) recentSwingHigh = highestClose;
+
+      const distanceFromHighPct = highestClose > 0 ? ((currentPriceInPosCurrency - highestClose) / highestClose) * 100 : 0;
+      const distanceFromLowPct = recentSwingLow > 0 ? ((currentPriceInPosCurrency - recentSwingLow) / recentSwingLow) * 100 : 0;
+      const isBreakOfStructure = recentSwingLow > 0 && currentPriceInPosCurrency < (recentSwingLow * 0.995);
+      const isNearHigh = highestClose > 0 && distanceFromHighPct >= -2.0;
+
       const suggestion = evaluateSuggestionClient(
         totalGainPercent,
         todayChangePercent,
         consecutiveUp,
         consecutiveDown,
-        settings
+        settings,
+        {
+          isBreakOfStructure,
+          isNearHigh,
+          distanceFromHighPct,
+          recentSwingLow,
+          highestClose,
+          currency: posCurrency
+        }
       );
 
       const investedEur = investedNative * posToEurRate;
       const currentValueEur = currentValueNative * posToEurRate;
       const todayChangeEur = todayChangeNative * posToEurRate;
       const totalGainEur = currentValueEur - investedEur;
+      const totalFeesEur = totalFeesNative * posToEurRate;
+      const netGainEur = totalGainEur - totalFeesEur;
 
       totalInvestedEur += investedEur;
       totalCurrentValueEur += currentValueEur;
@@ -1354,6 +1497,20 @@ async function buildPortfolioData() {
         currency: posCurrency,
         investedNative,
         investedEur,
+        buyFee,
+        sellFee,
+        totalFeesNative,
+        totalFeesEur,
+        netGainNative,
+        netGainEur,
+        netGainPercent,
+        highestClose,
+        lowestClose,
+        recentSwingLow,
+        recentSwingHigh,
+        distanceFromHighPct,
+        distanceFromLowPct,
+        isBreakOfStructure,
         currentPrice: currentPriceInPosCurrency,
         currentValueNative,
         currentValueEur,
@@ -1378,6 +1535,10 @@ async function buildPortfolioData() {
       const posToEur = posCurrency === "USD" ? 0.92 : (posCurrency === "GBP" ? 1.18 : 1.0);
       const investedEur = investedNative * posToEur;
 
+      const buyFee = parseFloat(pos.buyFee) || 0;
+      const sellFee = parseFloat(pos.sellFee) || 0;
+      const totalFeesNative = buyFee + sellFee;
+
       totalInvestedEur += investedEur;
       totalCurrentValueEur += investedEur;
 
@@ -1392,6 +1553,20 @@ async function buildPortfolioData() {
         currency: posCurrency,
         investedNative,
         investedEur,
+        buyFee,
+        sellFee,
+        totalFeesNative,
+        totalFeesEur: totalFeesNative * posToEur,
+        netGainNative: 0,
+        netGainEur: 0,
+        netGainPercent: 0,
+        highestClose: pos.buyPrice,
+        lowestClose: pos.buyPrice,
+        recentSwingLow: pos.buyPrice,
+        recentSwingHigh: pos.buyPrice,
+        distanceFromHighPct: 0,
+        distanceFromLowPct: 0,
+        isBreakOfStructure: false,
         currentPrice: pos.buyPrice,
         currentValueNative: investedNative,
         currentValueEur: investedEur,
@@ -1634,6 +1809,29 @@ function renderPositions() {
     const convertedCurrent = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${eurFormat.format(pos.currentValueEur)})</span>` : "";
     const convertedGain = pos.currency !== "EUR" ? `<span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">(~${pos.totalGainEur >= 0 ? "+" : ""}${eurFormat.format(pos.totalGainEur)})</span>` : "";
 
+    const hasFees = (pos.totalFeesNative || 0) > 0;
+    const netGainFormatted = `${pos.netGainNative >= 0 ? "+" : ""}${formatCurrency(pos.netGainNative, pos.currency)}`;
+    const convertedNetGain = pos.currency !== "EUR" && hasFees
+      ? `<span style="font-size:10px; color:var(--text-muted); display:inline-block; margin-left:3px;">(~${pos.netGainEur >= 0 ? "+" : ""}${eurFormat.format(pos.netGainEur)})</span>`
+      : "";
+
+    const feesNoticeHtml = hasFees
+      ? `<div style="font-size:11px; margin-top:6px; padding-top:4px; border-top:1px dashed var(--card-border); color:var(--text-muted); line-height:1.35;">
+          <span>${t("netGain")} : <strong style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${netGainFormatted} (${pctFormat(pos.netGainPercent)})</strong>${convertedNetGain}</span>
+          <span style="display:block; font-size:10px; opacity:0.85;">${t("totalFeesLabel")}${formatCurrency(pos.totalFeesNative, pos.currency)} (${t("afterFees")})</span>
+        </div>`
+      : "";
+
+    const highFormatted = formatCurrency(pos.highestClose || 0, pos.currency);
+    const lowFormatted = formatCurrency(pos.recentSwingLow || 0, pos.currency);
+    const distHighText = `${(pos.distanceFromHighPct || 0) >= -0.1 ? "0.0%" : (pos.distanceFromHighPct || 0).toFixed(1) + "%"}`;
+    const structureBar = (pos.highestClose > 0) ? `
+      <div class="market-structure-bar" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:11px; padding:7px 12px; background:rgba(255,255,255,0.03); border-radius:8px; margin:12px 0 4px 0; border:1px solid var(--card-border);">
+        <span>🏔️ <strong style="color:var(--text-main);">${t("highPeak")} :</strong> ${highFormatted} <span style="color:var(--text-muted);">(${distHighText} ${t("distanceFromHigh")})</span></span>
+        <span>🛡️ <strong style="color:var(--text-main);">${t("keySupport")} :</strong> ${lowFormatted}</span>
+      </div>
+    ` : "";
+
     return `
       <article class="pos-card" data-id="${pos.id}">
         <div class="pos-top-row">
@@ -1657,14 +1855,17 @@ function renderPositions() {
               ${convertedCurrent}
             </div>
             <div class="pos-metric-box">
-              <span class="metric-label">${t("totalGain")}</span>
+              <span class="metric-label">${hasFees ? t("grossGain") : t("totalGain")}</span>
               <span class="pill-badge ${pos.totalGainPercent >= 0 ? "up" : "down"}">
                 ${gainFormatted} (${pctFormat(pos.totalGainPercent)})
               </span>
               ${convertedGain}
+              ${feesNoticeHtml}
             </div>
           </div>
         </div>
+
+        ${structureBar}
 
         <div class="suggestion-banner ${bannerClass}">
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -1701,6 +1902,7 @@ function getBannerClass(action) {
   switch (action) {
     case 'HOLD':
     case 'HOLD_BULLISH':
+    case 'HOLD_AT_HIGH':
       return 'banner-success';
     case 'TAKE_PROFIT':
       return 'banner-warning';
@@ -1709,6 +1911,7 @@ function getBannerClass(action) {
     case 'WATCH_DOWNTREND':
       return 'banner-orange';
     case 'SELL_STOP_LOSS':
+    case 'SELL_BREAKDOWN':
       return 'banner-danger';
     case 'BUY_DIP':
       return 'banner-blue';
@@ -1779,6 +1982,10 @@ window.openPositionModal = function() {
   const timeEl = document.getElementById('posBuyTime');
   if (timeEl) timeEl.value = '';
   document.getElementById('posCurrency').value = 'EUR';
+  const buyFeeEl = document.getElementById('posBuyFee');
+  const sellFeeEl = document.getElementById('posSellFee');
+  if (buyFeeEl) buyFeeEl.value = '';
+  if (sellFeeEl) sellFeeEl.value = '';
   updateCurrencyLabels();
   autocompleteDropdown.style.display = 'none';
   positionModal.classList.add('active');
@@ -1801,6 +2008,10 @@ window.editPosition = function(id) {
   document.getElementById('posInvestedAmount').value = pos.investedAmount || '';
   document.getElementById('posShares').value = pos.shares || '';
   document.getElementById('posBuyPrice').value = pos.buyPrice || '';
+  const buyFeeEl = document.getElementById('posBuyFee');
+  const sellFeeEl = document.getElementById('posSellFee');
+  if (buyFeeEl) buyFeeEl.value = pos.buyFee !== undefined ? pos.buyFee : (pos.symbol === 'SPCX' ? 1.17 : '');
+  if (sellFeeEl) sellFeeEl.value = pos.sellFee !== undefined ? pos.sellFee : (pos.symbol === 'SPCX' ? 1.17 : '');
   document.getElementById('posNotes').value = pos.notes || '';
   updateCurrencyLabels();
 
@@ -1835,6 +2046,8 @@ async function handleFormSubmit(e) {
   const investedAmount = parseFloat(document.getElementById('posInvestedAmount').value) || 0;
   const shares = parseFloat(document.getElementById('posShares').value) || 1;
   const buyPrice = parseFloat(document.getElementById('posBuyPrice').value) || (shares > 0 && investedAmount > 0 ? investedAmount / shares : 0);
+  const buyFee = parseFloat(document.getElementById('posBuyFee')?.value) || 0;
+  const sellFee = parseFloat(document.getElementById('posSellFee')?.value) || 0;
   const notes = document.getElementById('posNotes').value;
 
   const posData = {
@@ -1847,6 +2060,8 @@ async function handleFormSubmit(e) {
     investedAmount,
     shares,
     buyPrice,
+    buyFee,
+    sellFee,
     notes
   };
 
@@ -2010,6 +2225,7 @@ function parseRevolutCSV(text) {
   const idxQty = rawHeaders.findIndex(h => h.includes("quantity") || h.includes("shares") || h.includes("quantité") || h.includes("units") || h.includes("parts"));
   const idxPrice = rawHeaders.findIndex(h => h.includes("price") || h.includes("prix") || h.includes("rate") || h.includes("cours"));
   const idxAmount = rawHeaders.findIndex(h => h.includes("total amount") || h.includes("montant total") || h.includes("amount") || h.includes("montant") || h.includes("total") || h.includes("cost basis") || h.includes("fiat"));
+  const idxFee = rawHeaders.findIndex(h => h.includes("fee") || h.includes("frais") || h.includes("commission"));
   const idxCur = rawHeaders.findIndex(h => h.includes("currency") || h.includes("devise"));
 
   const map = new Map();
@@ -2057,6 +2273,7 @@ function parseRevolutCSV(text) {
     const qty = Math.abs(parseFloat((row[idxQty] || "0").replace(",", "."))) || 0;
     const price = Math.abs(parseFloat((row[idxPrice] || "0").replace(",", "."))) || 0;
     const amount = Math.abs(parseFloat((row[idxAmount] || "0").replace(",", "."))) || (qty * price);
+    const fee = idxFee >= 0 ? Math.abs(parseFloat((row[idxFee] || "0").replace(",", "."))) || 0 : 0;
     const currency = idxCur >= 0 ? (row[idxCur] || "EUR").toUpperCase() : "EUR";
 
     if (!map.has(rawTicker)) {
@@ -2065,6 +2282,8 @@ function parseRevolutCSV(text) {
         name: desc || rawTicker,
         shares: 0,
         investedAmount: 0,
+        buyFee: 0,
+        sellFee: 0,
         currency,
         buyDate: buyDate || new Date().toISOString().split("T")[0],
         buyTime: buyTime || ""
@@ -2075,6 +2294,8 @@ function parseRevolutCSV(text) {
     if (isBuy) {
       entry.shares += qty;
       entry.investedAmount += amount;
+      entry.buyFee += fee;
+      entry.sellFee = entry.buyFee;
       if (buyDate) {
         entry.buyDate = buyDate;
         entry.buyTime = buyTime;
@@ -2100,6 +2321,8 @@ function parseRevolutCSV(text) {
       shares: Math.round(p.shares * 100000000) / 100000000,
       investedAmount: Math.round(p.investedAmount * 100) / 100,
       buyPrice: p.shares > 0 ? Math.round((p.investedAmount / p.shares) * 100) / 100 : 0,
+      buyFee: Math.round((p.buyFee || 0) * 100) / 100,
+      sellFee: Math.round((p.buyFee || 0) * 100) / 100,
       notes: "Importé depuis relevé Revolut"
     }));
 }

@@ -195,6 +195,19 @@
           <input type="number" id="posBuyPrice" step="any" min="0" placeholder="Calculé automatiquement" class="readonly-input">
         </div>
 
+        <div class="form-row">
+          <div class="form-group">
+            <label for="posBuyFee" id="buyFeeLabel">Frais payés à l'achat</label>
+            <input type="number" id="posBuyFee" step="any" min="0" placeholder="Ex: 1.17">
+            <small class="form-hint">Commission Revolut payée à l'ordre.</small>
+          </div>
+          <div class="form-group">
+            <label for="posSellFee" id="sellFeeLabel">Frais de vente estimés</label>
+            <input type="number" id="posSellFee" step="any" min="0" placeholder="Ex: 1.17">
+            <small class="form-hint">Frais prévus lors de la revente future.</small>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="posNotes">Note personnelle (facultatif)</label>
           <input type="text" id="posNotes" placeholder="Ex: Achat stratégie long terme, DCA...">
@@ -416,6 +429,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=1.7"></script>
+  <script src="./js/app.js?v=1.8"></script>
 </body>
 </html>

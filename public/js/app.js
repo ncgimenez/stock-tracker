@@ -3040,6 +3040,7 @@ async function handleCashOutSubmit(e) {
     grossProfit: Math.round(grossProfit * 100) / 100,
     netProfit: Math.round(netProfit * 100) / 100,
     netProfitEur: Math.round(netProfitEur * 100) / 100,
+    posSnapshot: JSON.parse(JSON.stringify(currentCashOutPos)),
     created_at: new Date().toISOString()
   };
 
@@ -3148,7 +3149,7 @@ function renderCashOutTab() {
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; gap:16px;">
+        <div style="display:flex; align-items:center; gap:10px;">
           <div class="cashout-item-profit">
             <div style="font-size: 17px; font-weight: 800; color: ${isWin ? 'var(--color-up)' : 'var(--color-down)'};">
               ${profitText}${eurEquiv}
@@ -3157,11 +3158,67 @@ function renderCashOutTab() {
               ${badgeLabel}
             </div>
           </div>
-          <button class="btn-ghost-danger" onclick="deleteCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Delete this record' : 'Supprimer cet enregistrement'}" style="padding: 6px 10px;">🗑️</button>
+          <button class="btn btn-secondary" onclick="restoreCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Cancel sale & restore to portfolio' : 'Annuler la vente et remettre dans mon portefeuille'}" style="font-size: 11px; padding: 6px 12px; gap: 4px;">
+            ↩️ ${currentLang === 'en' ? 'Restore' : 'Remettre au portefeuille'}
+          </button>
+          <button class="btn-ghost-danger" onclick="deleteCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Delete this record permanently' : 'Supprimer définitivement cet enregistrement'}" style="padding: 6px 10px;">🗑️</button>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function restoreCashOutRecord(id) {
+  const local = getLocalData();
+  const record = (local.cashOuts || []).find(c => c.id === id);
+  if (!record) return;
+
+  const confirmRestore = confirm(
+    currentLang === 'en'
+      ? `Cancel this sale and restore ${record.sharesSold} shares of ${record.symbol} back into your active portfolio?`
+      : `Voulez-vous annuler cet encaissement et réintégrer les ${record.sharesSold} parts de ${record.symbol} dans votre portefeuille actif ?`
+  );
+  if (!confirmRestore) return;
+
+  local.positions = local.positions || [];
+  const existingIdx = local.positions.findIndex(p => p.id === record.posId || p.symbol.toUpperCase() === record.symbol.toUpperCase());
+
+  if (existingIdx >= 0) {
+    const pos = local.positions[existingIdx];
+    pos.shares = Math.round((pos.shares + record.sharesSold) * 1000000) / 1000000;
+    pos.investedAmount = Math.round((pos.shares * pos.buyPrice) * 100) / 100;
+    pos.buyFee = Math.round(((pos.buyFee || 0) + (record.buyFee || 0)) * 100) / 100;
+  } else if (record.posSnapshot) {
+    local.positions.push(record.posSnapshot);
+  } else {
+    local.positions.push({
+      id: record.posId || ('pos_' + Date.now()),
+      symbol: record.symbol,
+      name: record.name || record.symbol,
+      buyDate: record.soldDate,
+      buyPrice: record.buyPrice,
+      shares: record.sharesSold,
+      investedAmount: Math.round((record.sharesSold * record.buyPrice) * 100) / 100,
+      currency: record.currency || 'USD',
+      buyFee: record.buyFee || 0,
+      sellFee: record.sellFee || 0,
+      notes: "Restauré après annulation d'encaissement"
+    });
+  }
+
+  local.cashOuts = (local.cashOuts || []).filter(c => c.id !== id);
+  saveLocalData(local);
+
+  updateNavTabBadges();
+  renderCashOutTab();
+  loadPortfolio(true);
+  pushToCloud();
+
+  alert(
+    currentLang === 'en'
+      ? `✅ Position restored successfully to your Active Portfolio!`
+      : `✅ Position restaurée avec succès dans votre Portefeuille Actif !`
+  );
 }
 
 function deleteCashOutRecord(id) {
@@ -3329,4 +3386,5 @@ window.openCashOutModal = openCashOutModal;
 window.closeCashOutModal = closeCashOutModal;
 window.togglePositionDetails = togglePositionDetails;
 window.deleteCashOutRecord = deleteCashOutRecord;
+window.restoreCashOutRecord = restoreCashOutRecord;
 window.quickAddIdea = quickAddIdea;

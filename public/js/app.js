@@ -924,6 +924,22 @@ function setupEventListeners() {
     }
   });
 
+  // Keyboard Shortcut: Cmd+Z or Ctrl+Z to undo last Cash Out
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        return;
+      }
+      const local = getLocalData();
+      const lastCashOut = (local.cashOuts || [])[0];
+      if (lastCashOut) {
+        e.preventDefault();
+        restoreCashOutRecord(lastCashOut.id);
+      }
+    }
+  });
+
   const investedInput = document.getElementById('posInvestedAmount');
   const sharesInput = document.getElementById('posShares');
   const unitPriceInput = document.getElementById('posBuyPrice');
@@ -3158,8 +3174,8 @@ function renderCashOutTab() {
               ${badgeLabel}
             </div>
           </div>
-          <button class="btn btn-secondary" onclick="restoreCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Cancel sale & restore to portfolio' : 'Annuler la vente et remettre dans mon portefeuille'}" style="font-size: 11px; padding: 6px 12px; gap: 4px;">
-            ↩️ ${currentLang === 'en' ? 'Restore' : 'Remettre au portefeuille'}
+          <button class="btn btn-primary" onclick="restoreCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Cancel sale & restore to portfolio' : 'Annuler la vente et remettre dans mon portefeuille'}" style="font-size: 11.5px; padding: 6px 12px; background: var(--color-blue); border-color: var(--color-blue); color: #fff; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px;">
+            ↩️ ${currentLang === 'en' ? 'Undo & Restore' : 'Annuler & Remettre au portefeuille'}
           </button>
           <button class="btn-ghost-danger" onclick="deleteCashOutRecord('${item.id}')" title="${currentLang === 'en' ? 'Delete this record permanently' : 'Supprimer définitivement cet enregistrement'}" style="padding: 6px 10px;">🗑️</button>
         </div>
@@ -3195,13 +3211,14 @@ function restoreCashOutRecord(id) {
       id: record.posId || ('pos_' + Date.now()),
       symbol: record.symbol,
       name: record.name || record.symbol,
-      buyDate: record.soldDate,
+      buyDate: record.posSnapshot?.buyDate || '2026-08-21',
+      buyTime: record.posSnapshot?.buyTime || '15:30',
       buyPrice: record.buyPrice,
       shares: record.sharesSold,
       investedAmount: Math.round((record.sharesSold * record.buyPrice) * 100) / 100,
       currency: record.currency || 'USD',
-      buyFee: record.buyFee || 0,
-      sellFee: record.sellFee || 0,
+      buyFee: record.buyFee || 1.17,
+      sellFee: record.sellFee || 1.17,
       notes: "Restauré après annulation d'encaissement"
     });
   }
@@ -3222,10 +3239,15 @@ function restoreCashOutRecord(id) {
 }
 
 function deleteCashOutRecord(id) {
-  const confirmDel = confirm(currentLang === 'en' ? 'Are you sure you want to delete this cash out record?' : 'Voulez-vous vraiment supprimer cet enregistrement d\'encaissement ?');
+  const local = getLocalData();
+  const record = (local.cashOuts || []).find(c => c.id === id);
+  const confirmDel = confirm(
+    currentLang === 'en'
+      ? `Permanently delete this cash out record without restoring ${record ? record.symbol : ''} to your active portfolio?\n\nTip: To put your shares back into your active portfolio, click "Undo & Restore" instead.`
+      : `Supprimer définitivement cet enregistrement SANS remettre les parts de ${record ? record.symbol : ''} dans votre portefeuille ?\n\nAstuce : Si vous voulez simplement récupérer vos parts dans votre portefeuille actif, cliquez sur "Annuler & Remettre au portefeuille".`
+  );
   if (!confirmDel) return;
 
-  const local = getLocalData();
   local.cashOuts = (local.cashOuts || []).filter(c => c.id !== id);
   saveLocalData(local);
   updateNavTabBadges();

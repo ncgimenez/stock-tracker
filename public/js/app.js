@@ -1314,7 +1314,17 @@ function getLocalData() {
         const sh = parseFloat(pos.shares) || 0;
         let inv = parseFloat(pos.investedAmount) || 0;
         let pr = parseFloat(pos.buyPrice) || 0;
-        if (pos.symbol === 'SPCX' && (pr <= 0 || inv <= 0)) {
+        if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
+          pos.symbol = 'DFTK.DE';
+          pos.name = 'DF Deutsche Forfait AG';
+          pos.shares = 1.01226993;
+          pos.buyPrice = 16.30;
+          pos.investedAmount = 17.50;
+          pos.buyFee = 1.00;
+          pos.sellFee = 1.00;
+          pos.currency = 'EUR';
+          changed = true;
+        } else if (pos.symbol === 'SPCX' && (pr <= 0 || inv <= 0)) {
           pos.buyPrice = 134.17;
           pos.investedAmount = 48.82;
           pos.buyFee = 1.17;
@@ -1399,6 +1409,60 @@ async function fetchClientChart(symbol, defaultPrice = 100) {
     }
   } catch (err) {
     console.warn(`Fetch live pour ${symbol} :`, err.message);
+  }
+
+  // If ticker has no dot and failed, try with European exchange suffix (.DE for XETRA/Frankfurt or .PA for Paris)
+  if (!symbol.includes('.')) {
+    for (const suffix of ['.DE', '.PA']) {
+      try {
+        const altUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol + suffix)}?range=3mo&interval=1d`;
+        const altProxy = `https://proxy.cors.dev/${altUrl}`;
+        const altRes = await fetch(altProxy, { signal: getAbortSignal(3000) });
+        if (altRes.ok) {
+          const altJson = await altRes.json();
+          const altResult = altJson?.chart?.result?.[0];
+          if (altResult) {
+            const meta = altResult.meta || {};
+            const timestamps = altResult.timestamp || [];
+            const quote = altResult.indicators?.quote?.[0] || {};
+            const closes = quote.close || [];
+
+            const validDaily = [];
+            for (let i = 0; i < timestamps.length; i++) {
+              const c = closes[i];
+              if (c !== null && c !== undefined && !isNaN(c)) {
+                validDaily.push({
+                  timestamp: timestamps[i] * 1000,
+                  dateStr: new Date(timestamps[i] * 1000).toISOString().split('T')[0],
+                  close: c
+                });
+              }
+            }
+
+            const currentPrice = meta.regularMarketPrice || (validDaily.length ? validDaily[validDaily.length - 1].close : defaultPrice);
+            const dayHigh = meta.regularMarketDayHigh || currentPrice;
+            const dayLow = meta.regularMarketDayLow || currentPrice;
+
+            const payload = {
+              symbol: meta.symbol || (symbol + suffix),
+              shortName: meta.shortName || meta.longName || symbol,
+              currency: (meta.currency || 'EUR').toUpperCase(),
+              currentPrice,
+              previousClose: (validDaily.length > 1 ? validDaily[validDaily.length - 2].close : (meta.chartPreviousClose || currentPrice)),
+              dayHigh,
+              dayLow,
+              history: validDaily,
+            };
+
+            clientCache.quotes.set(symbol, payload);
+            clientCache.quotes.set(symbol + suffix, payload);
+            return payload;
+          }
+        }
+      } catch (e) {
+        // continue to next suffix or fallback
+      }
+    }
   }
 
   // Safe fallback so it NEVER hangs
@@ -1615,7 +1679,17 @@ async function buildPortfolioData() {
       const chartCurrency = (chart.currency || posCurrency).toUpperCase();
 
       // AUTO-REPAIR MISSING BUY PRICE OR INVESTED AMOUNT
-      if (buyPrice <= 0 || investedNative <= 0) {
+      if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
+        buyPrice = 16.30;
+        investedNative = 17.50;
+        pos.symbol = 'DFTK.DE';
+        pos.name = 'DF Deutsche Forfait AG';
+        pos.buyPrice = 16.30;
+        pos.investedAmount = 17.50;
+        pos.buyFee = 1.00;
+        pos.sellFee = 1.00;
+        pos.currency = 'EUR';
+      } else if (buyPrice <= 0 || investedNative <= 0) {
         if (pos.symbol === 'SPCX') {
           buyPrice = 134.17;
           investedNative = 48.82;

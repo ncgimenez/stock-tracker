@@ -305,22 +305,30 @@
           </div>
         </div>
 
-        <div class="form-row form-row-3">
+        <div class="form-row form-row-4">
           <div class="form-group">
-            <label for="posBuyDate">Date d'achat</label>
-            <input type="date" id="posBuyDate">
+            <label for="posType">Type d'actif</label>
+            <select id="posType">
+              <option value="STOCK">📈 Action (Stock)</option>
+              <option value="ETF">🏛️ ETF (Fonds indiciel)</option>
+              <option value="CRYPTO">🪙 Crypto</option>
+            </select>
           </div>
           <div class="form-group">
-            <label for="posBuyTime">Heure (facultatif)</label>
-            <input type="time" id="posBuyTime">
-          </div>
-          <div class="form-group">
-            <label for="posCurrency">Devise d'achat</label>
+            <label for="posCurrency">Devise</label>
             <select id="posCurrency">
               <option value="EUR">EUR (€)</option>
               <option value="USD">USD ($)</option>
               <option value="GBP">GBP (£)</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label for="posBuyDate">Date d'achat</label>
+            <input type="date" id="posBuyDate">
+          </div>
+          <div class="form-group">
+            <label for="posBuyTime">Heure</label>
+            <input type="time" id="posBuyTime">
           </div>
         </div>
 
@@ -577,6 +585,6 @@
     </div>
   </div>
 
-  <script src="./js/app.js?v=3.2"></script>
+  <script src="./js/app.js?v=3.3"></script>
 </body>
 </html>

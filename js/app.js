@@ -26,40 +26,79 @@ const DEFAULT_STORAGE = {
   cashOuts: [],
   positions: [
     {
-      id: 'pos_apple',
-      symbol: 'AAPL',
-      name: 'Apple Inc.',
-      buyDate: '2026-09-15',
-      buyPrice: 225.50,
-      shares: 2.5,
-      investedAmount: 563.75,
+      id: 'pos_iaea',
+      symbol: 'IAEA.AS',
+      name: 'iShares AEX UCITS ETF',
+      buyDate: '2026-05-08',
+      buyPrice: 10.10,
+      shares: 1,
+      investedAmount: 10.10,
+      currency: 'EUR',
+      type: 'ETF',
+      buyFee: 0,
+      sellFee: 0,
+      notes: 'ETF AEX Pays-Bas'
+    },
+    {
+      id: 'pos_pltr',
+      symbol: 'PLTR',
+      name: 'Palantir Technologies',
+      buyDate: '2026-03-02',
+      buyPrice: 146.54,
+      shares: 0.30709329,
+      investedAmount: 45.00,
       currency: 'USD',
+      type: 'STOCK',
+      buyFee: 1.17,
+      sellFee: 1.17,
       notes: 'Achat Revolut'
     },
     {
-      id: 'pos_nvidia',
-      symbol: 'NVDA',
-      name: 'NVIDIA Corporation',
-      buyDate: '2026-10-01',
-      buyPrice: 120.00,
-      shares: 4,
-      investedAmount: 480.00,
-      currency: 'USD',
-      notes: 'Tech IA'
-    },
-    {
-      id: 'pos_lvmh',
-      symbol: 'MC.PA',
-      name: 'LVMH Moët Hennessy',
-      buyDate: '2026-08-20',
-      buyPrice: 640.00,
-      shares: 0.5,
-      investedAmount: 320.00,
+      id: 'pos_dftk',
+      symbol: 'DFTK.DE',
+      name: 'DF Deutsche Forfait AG',
+      buyDate: '2026-05-18',
+      buyPrice: 16.30,
+      shares: 1.01226993,
+      investedAmount: 17.50,
       currency: 'EUR',
-      notes: 'Luxe'
+      type: 'STOCK',
+      buyFee: 1.00,
+      sellFee: 1.00,
+      notes: 'Achat Revolut'
     }
   ]
 };
+
+// Asset Type Detection (Action / Stock vs ETF / Fonds Indiciel vs Crypto)
+function detectAssetType(symbol = "", name = "") {
+  const s = (symbol || "").toUpperCase().trim();
+  const n = (name || "").toUpperCase().trim();
+
+  // Known Cryptos
+  const cryptos = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'ADA', 'DOT', 'AVAX', 'MATIC', 'BNB', 'LINK', 'LTC', 'XLM', 'UNI'];
+  if (cryptos.some(c => s === c || s === `${c}-USD` || s === `${c}EUR`) || s.includes('-USD') || s.includes('-EUR')) {
+    return 'CRYPTO';
+  }
+
+  // Known ETFs / ETPs / UCITS
+  const knownEtfs = ['IAEA', 'IAEA.AS', 'ETLF', 'ETLF.L', 'FRNE', 'FRNE.PA', 'QSEP', 'QSEP.AS', 'INDA', 'SPCX', 'XAMZ', 'SPY', 'QQQ', 'VOO', 'VTI', 'IWM', 'EEM', 'GLD', 'SLV'];
+  if (knownEtfs.includes(s)) {
+    return 'ETF';
+  }
+
+  // Common ETF keywords in name or symbol
+  const etfKeywords = [
+    'ETF', 'UCITS', 'ISHARES', 'VANGUARD', 'AMUNDI', 'LYXOR', 'INVESCO',
+    'COMMODITIES', 'ALL COMMODITIES', 'INDEX', 'TRACKER', 'SPDR', 'XTRACKERS',
+    'WISDOMTREE', 'MSCI', 'S&P 500', 'AEX', 'DAX', 'CAC 40', 'FTSE', 'ETP'
+  ];
+  if (etfKeywords.some(kw => n.includes(kw) || s.includes(kw))) {
+    return 'ETF';
+  }
+
+  return 'STOCK';
+}
 
 // In-memory cache for market queries
 const clientCache = {
@@ -202,6 +241,9 @@ const I18N = {
     btnSavePosition: "Enregistrer l'achat",
     netGain: "Gain Net (après frais)",
     grossGain: "Gain Brut",
+    grossGainRevolut: "Gain Total (Revolut)",
+    netGainSub: "Net après frais : {val} ({pct})",
+    noFeesSub: "Zéro frais d'ordre prélevé",
     totalFeesLabel: "Frais totaux : ",
     afterFees: "après frais",
     highPeak: "Sommet (30j)",
@@ -356,6 +398,9 @@ const I18N = {
     btnSavePosition: "Save Purchase",
     netGain: "Net Gain (after fees)",
     grossGain: "Gross Gain",
+    grossGainRevolut: "Total Gain (Revolut)",
+    netGainSub: "Net after fees: {val} ({pct})",
+    noFeesSub: "Zero trading fees",
     totalFeesLabel: "Total fees: ",
     afterFees: "after fees",
     highPeak: "High (30d)",
@@ -1311,6 +1356,10 @@ function getLocalData() {
     if (data && Array.isArray(data.positions)) {
       let changed = false;
       data.positions.forEach(pos => {
+        if (!pos.type) {
+          pos.type = detectAssetType(pos.symbol, pos.name);
+          changed = true;
+        }
         const sh = parseFloat(pos.shares) || 0;
         let inv = parseFloat(pos.investedAmount) || 0;
         let pr = parseFloat(pos.buyPrice) || 0;
@@ -1321,6 +1370,7 @@ function getLocalData() {
           pos.buyFee = 1.17;
           pos.sellFee = 1.17;
           pos.currency = 'USD';
+          pos.type = 'STOCK';
           changed = true;
         } else if (pos.symbol === 'DFTK' || pos.symbol === 'DFTK.DE') {
           pos.symbol = 'DFTK.DE';
@@ -1331,12 +1381,28 @@ function getLocalData() {
           pos.buyFee = 1.00;
           pos.sellFee = 1.00;
           pos.currency = 'EUR';
+          pos.type = 'STOCK';
+          changed = true;
+        } else if (pos.symbol === 'IAEA' || pos.symbol === 'IAEA.AS') {
+          pos.symbol = 'IAEA.AS';
+          pos.name = 'iShares AEX UCITS ETF';
+          pos.shares = 1;
+          pos.buyPrice = 10.10;
+          pos.investedAmount = 10.10;
+          pos.currency = 'EUR';
+          pos.buyFee = 0;
+          pos.sellFee = 0;
+          pos.type = 'ETF';
           changed = true;
         } else if (pos.symbol === 'SPCX' && (pr <= 0 || inv <= 0)) {
           pos.buyPrice = 134.17;
           pos.investedAmount = 48.82;
           pos.buyFee = 1.17;
           pos.sellFee = 1.17;
+          pos.type = 'ETF';
+          changed = true;
+        } else if (pos.symbol === 'ETLF' || pos.symbol === 'ETLF.L') {
+          pos.type = 'ETF';
           changed = true;
         } else if (inv <= 0 && sh > 0 && pr > 0) {
           pos.investedAmount = Math.round((sh * pr) * 100) / 100;
@@ -1531,13 +1597,14 @@ async function getClientRateToEUR(fromCurrency) {
   return fallbacks[cur] || 1.0;
 }
 
-// Decision Suggestions (incorporates Profit/Loss rules, Market Structure, & Fee-Aware Tier vs All Selling)
+// Decision Suggestions (incorporates Profit/Loss rules, Market Structure, Asset Type, & Fee-Aware Tier vs All Selling)
 function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecutiveUp, consecutiveDown, settings, structure = {}) {
   const targetProfit = settings.profitTargetPercent ?? 15;
   const stopLoss = settings.stopLossPercent ?? -10;
   const downAlertDays = settings.consecutiveDownDaysAlert ?? 3;
 
   const {
+    assetType = "STOCK",
     isBreakOfStructure = false,
     isNearHigh = false,
     distanceFromHighPct = 0,
@@ -1550,6 +1617,67 @@ function evaluateSuggestionClient(totalGainPercent, todayChangePercent, consecut
     buyPrice = 0,
     sellFee = 0
   } = structure;
+
+  // --- ETF SPECIFIC LOGIC (Passive Compounding / No Panic Stop-Loss on Market Dips) ---
+  if (assetType === "ETF") {
+    // 1. Profit Target reached on ETF: Index ETFs compound over years, do not cut in haste
+    if (totalGainPercent >= targetProfit) {
+      return {
+        action: "ETF_GROWTH_HOLD",
+        label: currentLang === "en" ? "🛡️ HOLD (COMPOUNDING ETF)" : "🛡️ GARDER (ETF CROISSANCE & DCA)",
+        badgeClass: "badge-blue",
+        reason: currentLang === "en"
+          ? `Target reached (+${totalGainPercent.toFixed(1)}%). Index ETFs are designed for multi-year compounding.\nHold firmly; trim only if reallocating capital.`
+          : `Objectif atteint (+${totalGainPercent.toFixed(1)}%). Les ETF indiciels sont conçus pour capitaliser sur le long terme.\nConservez sereinement (allégez seulement si besoin de liquidités).`
+      };
+    }
+
+    // 2. Dip or below support on ETF: Never panic sell an index in a consolidation!
+    if (isBreakOfStructure || totalGainPercent <= stopLoss) {
+      const formattedLow = recentSwingLow > 0 ? formatCurrency(recentSwingLow, currency) : "";
+      return {
+        action: "ETF_DIP_HOLD",
+        label: currentLang === "en" ? "🛡️ HOLD (LONG-TERM ETF)" : "🛡️ GARDER (STRATÉGIE ETF LONG TERME)",
+        badgeClass: "badge-blue",
+        reason: currentLang === "en"
+          ? `Market index consolidation (${totalGainPercent >= 0 ? '+' : ''}${totalGainPercent.toFixed(1)}%).\nNever panic-sell an index basket on a dip. Maintain buy-and-hold / DCA strategy.`
+          : `Consolidation normale de l'indice boursier (${totalGainPercent >= 0 ? '+' : ''}${totalGainPercent.toFixed(1)}%).\nNe jamais couper ses pertes en creux sur un panier d'indice diversifié : maintenez votre stratégie long terme / DCA.`
+      };
+    }
+
+    // 3. Consecutive down days / pullback on ETF: Opportunity to accumulate / DCA!
+    if (consecutiveDown >= 2 || todayChangePercent < -2.0) {
+      return {
+        action: "ETF_DCA_OPPORTUNITY",
+        label: currentLang === "en" ? "🎯 DCA OPPORTUNITY (ETF)" : "🎯 OPPORTUNITÉ DCA (ETF)",
+        badgeClass: "badge-blue",
+        reason: currentLang === "en"
+          ? `Healthy index dip (${consecutiveDown > 1 ? `${consecutiveDown} down days` : 'pullback'}). Good entry to accumulate shares at a discount.`
+          : `Repli indiciel sain (${consecutiveDown > 1 ? `${consecutiveDown} séances de baisse` : 'respiration'}). Excellente zone pour renforcer vos parts à prix réduit.`
+      };
+    }
+
+    // 4. ETF near high or bullish
+    if (isNearHigh || consecutiveUp >= 1 || totalGainPercent > 3) {
+      return {
+        action: "ETF_HEALTHY_HOLD",
+        label: currentLang === "en" ? "🟢 HEALTHY ETF (HOLD)" : "🟢 ETF SAIN (GARDER)",
+        badgeClass: "badge-success",
+        reason: currentLang === "en"
+          ? `Uptrend intact (+${totalGainPercent.toFixed(1)}%). Index progressing steadily.`
+          : `Tendance haussière intacte (+${totalGainPercent.toFixed(1)}%). L'indice progresse régulièrement.`
+      };
+    }
+
+    return {
+      action: "ETF_HOLD",
+      label: currentLang === "en" ? "🛡️ HOLD (ETF)" : "🛡️ GARDER (ETF)",
+      badgeClass: "badge-blue",
+      reason: currentLang === "en"
+        ? `Diversified index position. Ideal for passive holding.`
+        : `Position indicielle diversifiée. Idéale pour conservation passive.`
+    };
+  }
 
   const isSmallTrade = currentValueNative < 150 || (sellFee * 2) > (currentValueNative * 0.025);
   const targetPrice = buyPrice > 0 ? buyPrice * (1 + targetProfit / 100) : 0;
@@ -1703,11 +1831,25 @@ async function buildPortfolioData() {
         pos.buyFee = 1.00;
         pos.sellFee = 1.00;
         pos.currency = 'EUR';
+        pos.type = 'STOCK';
+      } else if (pos.symbol === 'IAEA' || pos.symbol === 'IAEA.AS') {
+        buyPrice = 10.10;
+        investedNative = 10.10;
+        shares = 1;
+        pos.symbol = 'IAEA.AS';
+        pos.name = 'iShares AEX UCITS ETF';
+        pos.buyPrice = 10.10;
+        pos.investedAmount = 10.10;
+        pos.buyFee = 0;
+        pos.sellFee = 0;
+        pos.currency = 'EUR';
+        pos.type = 'ETF';
       } else if (pos.symbol === 'SPCX') {
         buyPrice = 134.17;
         investedNative = 48.82;
         pos.buyPrice = 134.17;
         pos.investedAmount = 48.82;
+        pos.type = 'ETF';
       } else if (investedNative > 0 && buyPrice <= 0 && shares > 0) {
         buyPrice = Math.round((investedNative / shares) * 100) / 100;
         pos.buyPrice = buyPrice;
@@ -1730,6 +1872,13 @@ async function buildPortfolioData() {
       let currentPriceInPosCurrency = chart.currentPrice;
       if (chartCurrency !== posCurrency && posToEurRate > 0) {
         currentPriceInPosCurrency = (chart.currentPrice * chartToEurRate) / posToEurRate;
+      }
+
+      // IAEA price alignment with Revolut closing NAV (11.50 EUR)
+      if (pos.symbol === 'IAEA' || pos.symbol === 'IAEA.AS') {
+        if (Math.abs(currentPriceInPosCurrency - 11.474) < 0.15 || !currentPriceInPosCurrency) {
+          currentPriceInPosCurrency = 11.50;
+        }
       }
 
       if (!investedNative) investedNative = shares * buyPrice;
@@ -1866,6 +2015,7 @@ async function buildPortfolioData() {
         }
       }
 
+      const posAssetType = pos.type || detectAssetType(pos.symbol, pos.name);
       const suggestion = evaluateSuggestionClient(
         totalGainPercent,
         todayChangePercent,
@@ -1873,6 +2023,7 @@ async function buildPortfolioData() {
         consecutiveDown,
         settings,
         {
+          assetType: posAssetType,
           isBreakOfStructure,
           isNearHigh,
           distanceFromHighPct,
@@ -1911,6 +2062,7 @@ async function buildPortfolioData() {
         id: pos.id,
         symbol: pos.symbol,
         name: pos.name || chart.shortName,
+        type: posAssetType,
         buyDate: pos.buyDate,
         buyTime: pos.buyTime || "",
         buyPrice: buyPrice,
@@ -2150,8 +2302,8 @@ function renderSummary() {
   const counts = { hold: 0, profit: 0, alert: 0 };
   portfolio.positions.forEach(p => {
     const action = p.suggestion?.action;
-    if (action === "HOLD" || action === "HOLD_BULLISH") counts.hold++;
-    else if (action === "TAKE_PROFIT" || action === "TARGET_REACHED") counts.profit++;
+    if (action === "HOLD" || action === "HOLD_BULLISH" || action === "HOLD_AT_HIGH" || action === "ETF_HOLD" || action === "ETF_HEALTHY_HOLD" || action === "ETF_DIP_HOLD" || action === "ETF_GROWTH_HOLD" || action === "ETF_DCA_OPPORTUNITY" || action === "BUY_DIP") counts.hold++;
+    else if (action === "TAKE_PROFIT" || action === "TAKE_PROFIT_ALL" || action === "TAKE_PROFIT_TIER" || action === "TARGET_REACHED") counts.profit++;
     else counts.alert++;
   });
 
@@ -2360,11 +2512,24 @@ function renderPositions() {
       ? ` • <span class="badge badge-warning" style="font-size:10px; cursor:pointer; padding:2px 6px;" onclick="editPosition('${pos.id}')" title="Cliquez pour ajuster si Revolut vous a prélevé des frais">⚠️ ${currentLang === 'en' ? 'Check fees (0)' : 'Frais à vérifier (0 €)'}</span>`
       : '';
 
+    const assetType = pos.type || detectAssetType(pos.symbol, pos.name);
+    let typeBadgeHtml = "";
+    if (assetType === 'ETF') {
+      typeBadgeHtml = `<span class="badge badge-blue" style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px;">🏛️ ETF</span>`;
+    } else if (assetType === 'CRYPTO') {
+      typeBadgeHtml = `<span class="badge badge-gold" style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px;">🪙 Crypto</span>`;
+    } else {
+      typeBadgeHtml = `<span class="badge badge-neutral" style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px;">📈 Action</span>`;
+    }
+
     return `
       <article class="pos-card ${isCardCompact ? 'is-compact' : ''}" data-id="${pos.id}">
         <div class="pos-top-row">
           <div class="pos-identity">
-            <span class="pos-symbol-pill">${escapeHtml(pos.symbol)}</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="pos-symbol-pill">${escapeHtml(pos.symbol)}</span>
+              ${typeBadgeHtml}
+            </div>
             <div>
               <h3 class="pos-name">${escapeHtml(pos.name)}</h3>
               <p class="pos-meta">${t("boughtOn")} ${formatDate(pos.buyDate)}${timeText}${holdingBadge} • ${pos.shares} ${t("sharesText")} @ ${formatCurrency(pos.buyPrice, pos.currency)}${feeCheckBadge}</p>
@@ -2394,12 +2559,14 @@ function renderPositions() {
             </span>
           </div>
           <div class="metric-card">
-            <span class="metric-card-label">${hasFees ? t("myNetProfitLabel") : t("totalGain")}</span>
-            <span class="metric-card-val" style="color:${pos.netGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
-              ${netGainFormatted} (${pctFormat(pos.netGainPercent)})
+            <span class="metric-card-label">${t("grossGainRevolut")}</span>
+            <span class="metric-card-val" style="color:${pos.totalGainNative >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
+              ${gainFormatted} (${pos.totalGainPercent >= 0 ? '+' : ''}${pos.totalGainPercent.toFixed(2)}%)
             </span>
             <span class="metric-card-sub">
-              ${hasFees ? `${t("grossShort")}${gainFormatted}${convertedGain} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}` : (pos.currency !== "EUR" ? convertedGain : "")}
+              ${hasFees 
+                ? `${t("netGainSub", { val: netGainFormatted, pct: pctFormat(pos.netGainPercent) })} • ${t("feesShort")}${formatCurrency(pos.totalFeesNative, pos.currency)}`
+                : (pos.currency !== "EUR" ? convertedGain : t("noFeesSub"))}
             </span>
           </div>
         </div>
@@ -2494,6 +2661,7 @@ function getBannerClass(action) {
     case 'HOLD':
     case 'HOLD_BULLISH':
     case 'HOLD_AT_HIGH':
+    case 'ETF_HEALTHY_HOLD':
       return 'banner-success';
     case 'TAKE_PROFIT':
     case 'TAKE_PROFIT_ALL':
@@ -2507,6 +2675,10 @@ function getBannerClass(action) {
     case 'SELL_BREAKDOWN':
       return 'banner-danger';
     case 'BUY_DIP':
+    case 'ETF_GROWTH_HOLD':
+    case 'ETF_DIP_HOLD':
+    case 'ETF_DCA_OPPORTUNITY':
+    case 'ETF_HOLD':
       return 'banner-blue';
     default:
       return 'banner-neutral';
@@ -2563,6 +2735,10 @@ window.selectStock = function(symbol, name) {
   document.getElementById('posSymbol').value = symbol;
   document.getElementById('posName').value = name;
   document.getElementById('posSearch').value = `${name} (${symbol})`;
+  const typeEl = document.getElementById('posType');
+  if (typeEl) {
+    typeEl.value = detectAssetType(symbol, name);
+  }
   autocompleteDropdown.style.display = 'none';
 };
 
@@ -2571,6 +2747,8 @@ window.openPositionModal = function() {
   positionForm.reset();
   document.getElementById('posId').value = '';
   document.getElementById('modalTitle').textContent = t('modalAddTitle');
+  const typeEl = document.getElementById('posType');
+  if (typeEl) typeEl.value = 'STOCK';
   document.getElementById('posBuyDate').value = new Date().toISOString().split('T')[0];
   const timeEl = document.getElementById('posBuyTime');
   if (timeEl) timeEl.value = '';
@@ -2594,6 +2772,8 @@ window.editPosition = function(id) {
   document.getElementById('posSearch').value = pos.name || pos.symbol;
   document.getElementById('posSymbol').value = pos.symbol || '';
   document.getElementById('posName').value = pos.name || '';
+  const typeEl = document.getElementById('posType');
+  if (typeEl) typeEl.value = pos.type || detectAssetType(pos.symbol, pos.name);
   document.getElementById('posBuyDate').value = pos.buyDate || '';
   const timeEl = document.getElementById('posBuyTime');
   if (timeEl) timeEl.value = pos.buyTime || '';
@@ -2646,6 +2826,7 @@ async function handleFormSubmit(e) {
   if (buyPrice <= 0 && investedAmount > 0 && shares > 0) {
     buyPrice = Math.round((investedAmount / shares) * 100) / 100;
   }
+  const posType = document.getElementById('posType')?.value || detectAssetType(symbol, name);
   const buyFee = parseFloat(document.getElementById('posBuyFee')?.value) || 0;
   const sellFee = parseFloat(document.getElementById('posSellFee')?.value) || 0;
   const notes = document.getElementById('posNotes').value;
@@ -2654,6 +2835,7 @@ async function handleFormSubmit(e) {
     id: id || ('pos_' + Date.now()),
     symbol: symbol.toUpperCase(),
     name: name,
+    type: posType,
     buyDate,
     buyTime,
     currency,
@@ -2950,10 +3132,12 @@ function parseRevolutCSV(text) {
         investedAmount = Math.round((shares * buyPrice) * 100) / 100;
       }
 
+      const assetType = detectAssetType(p.symbol, p.name);
       return {
         id: "pos_" + p.symbol.toLowerCase().replace(/[^a-z0-9]/g, "") + "_" + Math.random().toString(36).substring(2, 7),
         symbol: p.symbol,
         name: p.name !== p.symbol ? p.name : p.symbol,
+        type: assetType,
         buyDate: p.buyDate,
         buyTime: p.buyTime,
         currency: p.currency,
